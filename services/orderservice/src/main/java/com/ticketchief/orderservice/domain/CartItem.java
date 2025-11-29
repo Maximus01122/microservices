@@ -1,4 +1,4 @@
 package com.ticketchief.orderservice.domain;
 
-public record CartItem(Long id, Long eventId, Long seatId, long unitPriceCents) {
+public record CartItem(Long id, String eventId, String seatId, long unitPriceCents) {
 }

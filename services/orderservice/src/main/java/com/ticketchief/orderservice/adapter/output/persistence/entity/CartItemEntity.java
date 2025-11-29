@@ -1,15 +1,9 @@
 package com.ticketchief.orderservice.adapter.output.persistence.entity;
 
-import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.ticketchief.orderservice.domain.CartItem;
-import com.ticketchief.orderservice.domain.Order;
-import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.Setter;
-import org.antlr.v4.runtime.misc.NotNull;
-
-import java.util.ArrayList;
-import java.util.List;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
 
 // CartItemEntity.java
 @Entity
@@ -17,8 +11,8 @@ public class CartItemEntity {
     @Id
     @GeneratedValue
     private Long id;
-    private Long eventId;
-    private Long seatId;
+    private String eventId;
+    private String seatId;
     private long unitPriceCents;
 
     public static CartItemEntity fromDomain(CartItem cartItem) {
@@ -34,11 +28,11 @@ public class CartItemEntity {
         this.id = id;
     }
 
-    public void setEventId(Long eventId) {
+    public void setEventId(String eventId) {
         this.eventId = eventId;
     }
 
-    public void setSeatId(Long seatId) {
+    public void setSeatId(String seatId) {
         this.seatId = seatId;
     }
 

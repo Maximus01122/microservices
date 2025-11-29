@@ -12,7 +12,7 @@ public class OrderEntity {
     @Id
     @GeneratedValue
     private Long id;
-    private Long userId;
+    private String userId;
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "order_id")
     private List<CartItemEntity> items;
@@ -24,7 +24,7 @@ public class OrderEntity {
         this.id = id;
     }
 
-    public void setUserId(Long userId) {
+    public void setUserId(String userId) {
         this.userId = userId;
     }
 

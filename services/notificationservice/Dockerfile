@@ -1,10 +1,10 @@
+FROM maven:3.9-eclipse-temurin-21 AS build
+WORKDIR /app
+COPY pom.xml .
+COPY services/ services/
+RUN mvn -pl services/notificationservice -am package -DskipTests
+
 FROM eclipse-temurin:21-jre
-WORKDIR /opt/app
-
-# Falls du mit Maven baust:
-#   mvn -pl orderservice -am -DskipTests package
-ARG JAR_FILE=target/*.jar
-COPY ${JAR_FILE} app.jar
-
-# Profil "docker" kannst du optional setzen; hier nur per Env möglich
-ENTRYPOINT ["java","-jar","/opt/app/app.jar"]
+WORKDIR /app
+COPY --from=build /app/services/notificationservice/target/*.jar app.jar
+ENTRYPOINT ["java","-jar","app.jar"]

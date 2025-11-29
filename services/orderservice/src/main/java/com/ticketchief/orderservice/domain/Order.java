@@ -6,7 +6,7 @@ import java.util.List;
 public class Order {
 
     private final Long id;
-    private final Long userId;
+    private final String userId;
     private final List<CartItem> items;
     private Status status;
     public enum Status {
@@ -15,7 +15,7 @@ public class Order {
         PAYMENT_FAILED,
         PAID}
 
-    public Order(Long id, Long userId, List<CartItem> items, Status status) {
+    public Order(Long id, String userId, List<CartItem> items, Status status) {
         this.id = id;
         this.userId = userId;
         this.items = items;
@@ -23,7 +23,7 @@ public class Order {
     }
 
 
-    public Long getUserId() {
+    public String getUserId() {
         return userId;
     }
 

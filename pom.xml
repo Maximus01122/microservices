@@ -93,9 +93,9 @@
     </build>
 
     <modules>
-        <module>orderservice</module>
-        <module>payment</module>
-        <module>notificationservice</module>
-        <module>common</module>
+        <module>services/orderservice</module>
+        <module>services/payment</module>
+        <module>services/notificationservice</module>
+        <module>services/common</module>
     </modules>
 </project>

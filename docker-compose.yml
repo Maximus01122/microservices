@@ -1,0 +1,203 @@
+version: "3.9"
+
+services:
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: ticketchief-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: user
+      RABBITMQ_DEFAULT_PASS: password
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - ticketchief-net
+
+  db:
+    image: postgres:15-alpine
+    container_name: ticketchief-db
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ticketchief
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d ticketchief"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ticketchief-net
+
+  user:
+    build:
+      context: ./services/user
+    container_name: user-service
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    environment:
+      - AMQP_URL=amqp://user:password@rabbitmq:5672/
+      - DATABASE_URL=postgresql://user:password@db:5432/ticketchief
+      - SERVICE_PORT=3002
+    ports:
+      - "3002:3002"
+    networks:
+      - ticketchief-net
+
+  event-ticket:
+    build:
+      context: ./services/event-ticket
+    container_name: event-ticket
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    environment:
+      - AMQP_URL=amqp://user:password@rabbitmq:5672/
+      - DATABASE_URL=postgresql://user:password@db:5432/ticketchief
+      - SERVICE_PORT=3001
+    ports:
+      - "3001:3001"
+    networks:
+      - ticketchief-net
+
+  orderservice:
+    build:
+      context: .
+      dockerfile: services/orderservice/Dockerfile
+    container_name: orderservice
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: user
+      SPRING_RABBITMQ_PASSWORD: password
+      SERVER_PORT: 8080
+      APP_INVOICE_STORAGE_DIR: /data/invoices
+      APP_INVOICE_BASE_URL: http://orderservice:8080/files/invoices
+      
+      # Use ticketchief exchange for everything
+      APP_RABBIT_PAYMENT_EXCHANGE: ticketchief
+      APP_RABBIT_PAYMENT_ROUTING_KEY: payment.requested
+      APP_RABBIT_PROCESSED_ROUTING_KEY: payment.processed
+      
+      # Notifications
+      APP_NOTIFICATION_EXCHANGE: ticketchief
+      APP_NOTIFICATION_ROUTING_KEY: email.send
+      
+    ports:
+      - "8080:8080"
+    volumes:
+      - invoices:/data/invoices
+    networks:
+      - ticketchief-net
+
+  paymentservice:
+    build:
+      context: .
+      dockerfile: services/payment/Dockerfile
+    container_name: paymentservice
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: user
+      SPRING_RABBITMQ_PASSWORD: password
+      SERVER_PORT: 8081
+      
+      APP_RABBIT_EXCHANGE: ticketchief
+      APP_RABBIT_PROCESSED_EXCHANGE: ticketchief
+      APP_RABBIT_REQUEST_ROUTING_KEY: payment.requested
+      APP_RABBIT_PROCESSED_ROUTING_KEY: payment.processed
+      
+      APP_PAYMENT_SIMULATOR_SUCCESS_RATE: "1.0"
+      APP_PAYMENT_SIMULATOR_DELAY_MS: "500"
+    ports:
+      - "8081:8081"
+    networks:
+      - ticketchief-net
+
+  notificationservice:
+    build:
+      context: .
+      dockerfile: services/notificationservice/Dockerfile
+    container_name: notificationservice
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      orderservice:
+        condition: service_started
+    environment:
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: user
+      SPRING_RABBITMQ_PASSWORD: password
+      
+      SPRING_MAIL_HOST: mailhog
+      SPRING_MAIL_PORT: 1025
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH: "false"
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: "false"
+      SERVER_PORT: 8082
+      
+      APP_NOTIFICATION_EXCHANGE: ticketchief
+      APP_NOTIFICATION_ROUTING_KEY: email.send
+      
+      ORDER_SERVICE_BASE_URL: http://orderservice:8080
+    ports:
+      - "8082:8082"
+    networks:
+      - ticketchief-net
+
+  mailhog:
+    image: mailhog/mailhog
+    container_name: mailhog
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - ticketchief-net
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: ticketchief-ui
+    ports:
+      - "3000:3000"
+    environment:
+      - USER_SERVICE_URL=http://user:3002
+      - EVENT_SERVICE_URL=http://event-ticket:3001
+      - ORDER_SERVICE_URL=http://orderservice:8080
+      - WDS_SOCKET_PORT=0 # Fix for websocket HMR in some docker setups
+    stdin_open: true
+    tty: true
+    depends_on:
+      - user
+      - event-ticket
+      - orderservice
+    networks:
+      - ticketchief-net
+
+networks:
+  ticketchief-net:
+    driver: bridge
+
+volumes:
+  invoices:
+  postgres_data:
+

@@ -27,12 +27,12 @@ public class EmailRequestedPublisher implements PublishEmailRequestedPort {
     }
 
     @Override
-    public void publishEmailRequest(String correlationId, String toEmail, String invoiceUrlOrPath) {
+    public void publishEmailRequest(String correlationId, String toEmail, String subject, String body, String invoiceUrlOrPath) {
         EmailSendRequestedEvent emailEvent = new EmailSendRequestedEvent(
                 correlationId,
                 toEmail,
-                "Your TicketChief Invoice",
-                "Thank you for your purchase! Please find your invoice attached.",
+                subject,
+                body,
                 invoiceUrlOrPath
         );
 
