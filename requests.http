@@ -1,0 +1,126 @@
+# TicketChief REST Client
+
+@host = localhost
+@eventPort = 3001
+@userPort = 3002
+@eventBase = http://{{host}}:{{eventPort}}
+@userBase = http://{{host}}:{{userPort}}
+
+
+
+###
+# Health: User
+GET {{userBase}}/health
+
+###
+# Health: Event & Ticket
+GET {{eventBase}}/health
+
+###
+# 1) Register user
+# @name registerUser
+POST {{userBase}}/users
+Content-Type: application/json
+
+{
+  "email": "alice+{{$timestamp}}@example.com",
+  "name": "Alice"
+}
+
+###
+# 2) Get user by id
+GET {{userBase}}/users/{{registerUser.response.body.$.id}}
+
+###
+# 3) Login (mock)
+POST {{userBase}}/login
+Content-Type: application/json
+
+{
+  "email": "{{registerUser.response.body.$.email}}"
+}
+
+###
+# 4) Create event (owned by the user)
+# @name createEvent
+POST {{eventBase}}/events
+Content-Type: application/json
+
+{
+  "name": "Concert {{$guid}}",
+  "rows": 3,
+  "cols": 5,
+  "userId": "{{registerUser.response.body.$.id}}"
+}
+
+###
+# 5) Get event
+GET {{eventBase}}/events/{{createEvent.response.body.$.id}}
+
+###
+# 6) Reserve seats
+POST {{eventBase}}/events/{{createEvent.response.body.$.id}}/reserve
+Content-Type: application/json
+
+{
+  "userId": "{{registerUser.response.body.$.id}}",
+  "seats": ["A1", "A2"]
+}
+
+###
+# 6b) Rename event (creator only)
+PATCH {{eventBase}}/events/{{createEvent.response.body.$.id}}
+Content-Type: application/json
+
+{
+  "userId": "{{registerUser.response.body.$.id}}",
+  "name": "Concert Updated {{$guid}}"
+}
+
+###
+# (Optional) Negative: non-contiguous (should return 400)
+POST {{eventBase}}/events/{{createEvent.response.body.$.id}}/reserve
+Content-Type: application/json
+
+{
+  "userId": "{{registerUser.response.body.$.id}}",
+  "seats": ["A1", "A3"]
+}
+
+###
+# (Optional) Negative: more than 8 seats (should return 400)
+POST {{eventBase}}/events/{{createEvent.response.body.$.id}}/reserve
+Content-Type: application/json
+
+{
+  "userId": "{{registerUser.response.body.$.id}}",
+  "seats": ["A1","A2","A3","A4","A5","A6","A7","A8","A9"]
+}
+
+###
+# 7) Publish payment.validated in RabbitMQ UI (no HTTP request here)
+# Exchange: ticketchief, Routing key: payment.validated
+# JSON payload:
+# {
+#   "orderId": "demo-1",
+#   "eventId": "{{createEvent.response.body.$.id}}",
+#   "seats": ["A1","A2"],
+#   "userId": "{{registerUser.response.body.$.id}}"
+# }
+
+# Set this after you receive ticket.created from RabbitMQ
+@ticketId = INSERT_ID_HERE
+
+###
+# 8) Verify a ticket (use a ticketId from ticket.created message)
+POST {{eventBase}}/tickets/verify
+Content-Type: application/json
+
+{
+  "ticketId": "{{ticketId}}",
+  "eventId": "{{createEvent.response.body.$.id}}"
+}
+
+###
+# 9) Delete user (cleanup)
+DELETE {{userBase}}/users/{{registerUser.response.body.$.id}}
