@@ -11,7 +11,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class RabbitMqConfig {
 
-    @Value("${app.rabbit.notification.exchange:email.exchange}")
+    @Value("${app.rabbit.notification.exchange:ticketchief}")
     private String exchangeName;
 
     @Value("${app.rabbit.notification.queue:email.send.queue}")
@@ -19,6 +19,12 @@ public class RabbitMqConfig {
 
     @Value("${app.rabbit.notification.routing-key:email.send}")
     private String routingKey;
+
+    @Value("${app.rabbit.notification.verification-queue:email.verification.queue}")
+    private String verificationQueueName;
+
+    @Value("${app.rabbit.notification.verification-routing-key:user.email.verification.requested}")
+    private String verificationRoutingKey;
 
     @Bean
     public TopicExchange notificationsExchange() {
@@ -33,6 +39,16 @@ public class RabbitMqConfig {
     @Bean
     public Binding notificationsBinding(Queue notificationsQueue, TopicExchange notificationsExchange) {
         return BindingBuilder.bind(notificationsQueue).to(notificationsExchange).with(routingKey);
+    }
+
+    @Bean
+    public Queue verificationQueue() {
+        return QueueBuilder.durable(verificationQueueName).build();
+    }
+
+    @Bean
+    public Binding verificationBinding(Queue verificationQueue, TopicExchange notificationsExchange) {
+        return BindingBuilder.bind(verificationQueue).to(notificationsExchange).with(verificationRoutingKey);
     }
 
     @Bean

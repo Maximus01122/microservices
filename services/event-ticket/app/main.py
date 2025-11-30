@@ -16,7 +16,32 @@ from app.domain.entity import Event as EventEntity
 @asynccontextmanager
 # App lifecycle: connect broker, start consumer, and cleanly shut down.
 async def lifespan(app: FastAPI):
-    # Create tables
+    # Ensure schema has expected columns. If the table already exists, ALTER to add missing columns.
+    import logging
+    from sqlalchemy import text
+
+    logger = logging.getLogger("event-ticket.migrations")
+    # Execute each ALTER inside its own transaction so DDL is committed immediately and failures are visible
+    alters = [
+        "ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS description TEXT;",
+        "ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS venue VARCHAR(1024);",
+        "ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS start_time TIMESTAMP WITH TIME ZONE;",
+        "ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'DRAFT';",
+        "ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS seats JSONB;",
+        "ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS reservation_expires JSONB;",
+        "ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS reservation_holder JSONB;",
+        "ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT now();",
+        "ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT now();",
+    ]
+    for stmt in alters:
+        try:
+            with engine.begin() as conn_tx:
+                conn_tx.execute(text(stmt))
+            logger.info("Successfully executed: %s", stmt.strip())
+        except Exception as e:
+            logger.warning("Failed to run statement '%s': %s", stmt.strip(), e)
+
+    # Create tables (will not drop existing columns)
     Base.metadata.create_all(bind=engine)
 
     amqp_url = os.getenv("AMQP_URL", "amqp://guest:guest@localhost:5672/")

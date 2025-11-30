@@ -139,7 +139,7 @@ public class OrderService implements OrderServicePort, OrderPaymentServicePort {
             );
 
         } else {
-            order.setStatus(Status.PAYMENT_FAILED);
+            order.setStatus(Status.FAILED);
         }
         ordersJpaAdapter.save(order);
     }

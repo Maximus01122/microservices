@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.charset.StandardCharsets;
 
 @Service
 public class EmailService {
@@ -33,6 +34,19 @@ public class EmailService {
 
         } catch (Exception e) {
             log.error("Failed to send invoice email to {}: {}", to, e.getMessage(), e);
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void sendVerification(String to, String token) {
+        try {
+            String subject = "Please verify your TicketChief account";
+            String verificationLink = String.format("%s/verify?token=%s", "https://example.com/verify", token);
+            String body = "Welcome to TicketChief!\n\nPlease verify your email by clicking the link below:\n" + verificationLink;
+            sendEmailPort.send(to, subject, body, null, null);
+            log.info("Verification email sent to {}", to);
+        } catch (Exception e) {
+            log.error("Failed to send verification email to {}: {}", to, e.getMessage(), e);
             throw new RuntimeException(e);
         }
     }

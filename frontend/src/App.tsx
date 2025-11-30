@@ -40,6 +40,7 @@ const App: React.FC = () => {
   const [loginEmail, setLoginEmail] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regName, setRegName] = useState('');
+  const [regPassword, setRegPassword] = useState('');
   
   const [evtName, setEvtName] = useState('');
   const [evtRows, setEvtRows] = useState(5);
@@ -57,7 +58,7 @@ const App: React.FC = () => {
     e.preventDefault();
     setError(null); setSuccess(null);
     try {
-      await axios.post(`${API_BASE}/api/users`, { email: regEmail, name: regName });
+      await axios.post(`${API_BASE}/api/users`, { email: regEmail, name: regName, password: regPassword });
       setSuccess('Registered! Please login.');
       setActiveTab('login');
       setLoginEmail(regEmail);
@@ -282,6 +283,10 @@ const App: React.FC = () => {
                     <Form.Group className="mb-3">
                       <Form.Label>Name</Form.Label>
                       <Form.Control type="text" value={regName} onChange={e => setRegName(e.target.value)} required />
+                    </Form.Group>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Password</Form.Label>
+                      <Form.Control type="password" value={regPassword} onChange={e => setRegPassword(e.target.value)} minLength={8} required />
                     </Form.Group>
                     <Button variant="success" type="submit" className="w-100">Register</Button>
                   </Form>

@@ -44,6 +44,13 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- PostgreSQL JDBC driver for runtime when using Postgres in Docker -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>

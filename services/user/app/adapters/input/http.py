@@ -20,7 +20,8 @@ async def register_user(req: UserCreate, db: Session = Depends(get_db)) -> UserV
         raise HTTPException(status_code=409, detail="email already exists")
 
     user_id = str(uuid.uuid4())
-    user = User(id=user_id, email=req.email, name=req.name)
+    verification_token = str(uuid.uuid4())
+    user = User(id=user_id, email=req.email, name=req.name, verification_token=verification_token)
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -28,10 +29,10 @@ async def register_user(req: UserCreate, db: Session = Depends(get_db)) -> UserV
     assert state.broker is not None
     await state.broker.publish(
         "user.email.verification.requested",
-        {"userId": user_id, "email": req.email},
+        {"userId": user_id, "email": req.email, "token": verification_token},
     )
 
-    return UserView(id=user.id, email=user.email, name=user.name)
+    return UserView(id=str(user.id), email=user.email, name=user.name, is_verified=user.is_verified, role=user.role, created_at=user.created_at, updated_at=user.updated_at)
 
 
 @router.get("/users/{user_id}", response_model=UserView)
@@ -40,7 +41,7 @@ async def get_user(user_id: str, db: Session = Depends(get_db)) -> UserView:
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="user not found")
-    return UserView(id=user.id, email=user.email, name=user.name)
+    return UserView(id=str(user.id), email=user.email, name=user.name)
 
 
 @router.delete("/users/{user_id}", status_code=204)
@@ -61,4 +62,4 @@ async def login(req: LoginRequest, db: Session = Depends(get_db)) -> dict:
     if not found:
         raise HTTPException(status_code=401, detail="invalid credentials")
     token = f"dummy-{found.id}"
-    return {"token": token, "userId": found.id}
+    return {"token": token, "userId": str(found.id)}

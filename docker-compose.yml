@@ -143,6 +143,8 @@ services:
         condition: service_healthy
       orderservice:
         condition: service_started
+      db:
+        condition: service_healthy
     environment:
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_RABBITMQ_PORT: 5672
@@ -159,6 +161,10 @@ services:
       APP_NOTIFICATION_ROUTING_KEY: email.send
       
       ORDER_SERVICE_BASE_URL: http://orderservice:8080
+      # Postgres connection for Spring Boot
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/ticketchief
+      SPRING_DATASOURCE_USERNAME: user
+      SPRING_DATASOURCE_PASSWORD: password
     ports:
       - "8082:8082"
     networks:

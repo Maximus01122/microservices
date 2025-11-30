@@ -29,6 +29,11 @@ class Broker:
     async def publish(self, routing_key: str, message: dict) -> None:
         assert self._exchange is not None
         await self._exchange.publish(
-            aio_pika.Message(body=orjson.dumps(message)), routing_key=routing_key
+            aio_pika.Message(
+                body=orjson.dumps(message),
+                content_type="application/json",
+                delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
+            ),
+            routing_key=routing_key,
         )
 

@@ -1,6 +1,7 @@
 import string
 import time
 from typing import Dict, List, Optional
+from datetime import datetime
 from pydantic import BaseModel, Field
 
 # --------------------
@@ -13,6 +14,9 @@ class EventCreate(BaseModel):
     rows: int = Field(..., ge=1, le=26)  # up to Z
     cols: int = Field(..., ge=1, le=50)
     userId: str = Field(..., min_length=1)
+    description: Optional[str] = None
+    venue: Optional[str] = None
+    start_time: Optional[datetime] = None
 
 
 # Request body to reserve seats for an event by seat IDs like 'A1'.
@@ -27,7 +31,14 @@ class EventView(BaseModel):
     name: str
     rows: int
     cols: int
+    description: Optional[str] = None
+    venue: Optional[str] = None
+    start_time: Optional[datetime] = None
+    creator_user_id: Optional[str] = None
+    status: str
     seats: Dict[str, str]  # seatId -> status: available|reserved|confirmed
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 
 # Request body to verify a per-seat ticket for a specific event.
@@ -49,6 +60,15 @@ class TicketVerifyResponse(BaseModel):
     ticketId: Optional[str] = None
     eventId: Optional[str] = None
     seat: Optional[str] = None
+
+
+class TicketView(BaseModel):
+    id: str
+    event_id: str
+    seat_id: str
+    owner_user_id: Optional[str] = None
+    issued_at: Optional[datetime] = None
+    qr_code_url: Optional[str] = None
 
 
 # --------------------
