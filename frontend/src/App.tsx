@@ -213,7 +213,7 @@ const App: React.FC = () => {
           eventSourceRef.current.close();
           eventSourceRef.current = null;
         }
-        const es = new EventSource(`/api/events/${id}/stream`);
+        const es = new EventSource(`/api/events/${id}/updates`);
         es.onmessage = (evt) => {
           try {
             const payload = JSON.parse(evt.data);
@@ -316,7 +316,7 @@ const App: React.FC = () => {
 
       console.log('reserveSeats: starting reserve call', { eventId: currentEvent.id, seats: normalizedSeats, userId: user.id });
       // 1. Reserve at Event Service and capture reservationId
-      const reserveRes = await axios.post(`${API_BASE}/api/events/${currentEvent.id}/reserve`, {
+      const reserveRes = await axios.post(`${API_BASE}/api/events/${currentEvent.id}/reservations`, {
         userId: user.id,
         seats: normalizedSeats
       });

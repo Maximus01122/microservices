@@ -45,7 +45,7 @@ The easiest way to test the integration is via the React Frontend.
     *   Load the event using the ID (if not auto-loaded).
     *   Click on seats (Green = Available) to select them (Blue).
     *   Click "Reserve Selected Seats".
-    *   *Backend Action:* Calls `POST /api/events/{id}/reserve` (User Service) -> `POST /api/orders` (Order Service creates cart).
+*   *Backend Action:* Calls `POST /api/events/{id}/reservations` (Event Service) -> `POST /api/orders` (Order Service creates cart).
     *   *Effect:* Seats turn Yellow (Reserved).
 
 5.  **Pay & Finalize:**
@@ -86,9 +86,9 @@ curl -X POST http://localhost/api/events \
 ```
 *Copy the `id` returned (EVENT_ID).*
 
-### 3. Reserve Seats (Event Service)
+### 3. Create Reservation (Event Service)
 ```bash
-curl -X POST http://localhost/api/events/<EVENT_ID>/reserve \
+curl -X POST http://localhost/api/events/<EVENT_ID>/reservations \
   -H "Content-Type: application/json" \
   -d '{"userId": "<USER_ID>", "seats": ["A1", "A2"]}'
 ```

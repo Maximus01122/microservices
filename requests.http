@@ -58,8 +58,8 @@ Content-Type: application/json
 GET {{eventBase}}/events/{{createEvent.response.body.$.id}}
 
 ###
-# 6) Reserve seats
-POST {{eventBase}}/events/{{createEvent.response.body.$.id}}/reserve
+# 6) Create reservation (reserve seats)
+POST {{eventBase}}/events/{{createEvent.response.body.$.id}}/reservations
 Content-Type: application/json
 
 {
@@ -79,7 +79,7 @@ Content-Type: application/json
 
 ###
 # (Optional) Negative: non-contiguous (should return 400)
-POST {{eventBase}}/events/{{createEvent.response.body.$.id}}/reserve
+POST {{eventBase}}/events/{{createEvent.response.body.$.id}}/reservations
 Content-Type: application/json
 
 {
@@ -89,7 +89,7 @@ Content-Type: application/json
 
 ###
 # (Optional) Negative: more than 8 seats (should return 400)
-POST {{eventBase}}/events/{{createEvent.response.body.$.id}}/reserve
+POST {{eventBase}}/events/{{createEvent.response.body.$.id}}/reservations
 Content-Type: application/json
 
 {
@@ -113,7 +113,7 @@ Content-Type: application/json
 
 ###
 # 8) Verify a ticket (use a ticketId from ticket.created message)
-POST {{eventBase}}/tickets/verify
+POST {{eventBase}}/ticket-validations
 Content-Type: application/json
 
 {

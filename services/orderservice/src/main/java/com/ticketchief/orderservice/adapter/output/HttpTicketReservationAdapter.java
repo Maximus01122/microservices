@@ -2,7 +2,6 @@ package com.ticketchief.orderservice.adapter.output;
 
 import com.ticketchief.orderservice.port.output.TicketReservationPort;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
@@ -32,9 +31,9 @@ public class HttpTicketReservationAdapter implements TicketReservationPort {
     @Override
     public boolean releaseReservation(String reservationId) {
         try {
-            String url = eventTicketBase + "/reservations/" + reservationId + "/release";
-            ResponseEntity<String> res = rest.postForEntity(url, null, String.class);
-            return res.getStatusCode().is2xxSuccessful();
+            String url = eventTicketBase + "/reservations/" + reservationId;
+            rest.delete(url);
+            return true;
         } catch (Exception e) {
             return false;
         }

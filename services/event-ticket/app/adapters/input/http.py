@@ -181,9 +181,9 @@ async def rename_event(event_id: str, req: EventRename, db: Session = Depends(ge
     )
 
 
-@router.post("/events/{event_id}/reserve", status_code=200)
- # Reserve seats with business rules: same row, contiguous, ≤ 8 seats.
-async def reserve_seats(event_id: str, req: ReserveRequest, db: Session = Depends(get_db)) -> dict:
+@router.post("/events/{event_id}/reservations", status_code=201)
+# Create a reservation resource for specific seats on an event.
+async def create_reservation(event_id: str, req: ReserveRequest, db: Session = Depends(get_db)) -> dict:
     # Transactional lock would be better here, but for simplicity we use standard check
     event = db.query(EventEntity).filter(EventEntity.id == event_id).with_for_update().first()
     if not event:
@@ -296,8 +296,8 @@ async def reserve_seats(event_id: str, req: ReserveRequest, db: Session = Depend
     return {"eventId": event_id, "reserved": normalized_seats, "reservationId": reservation_id, "expiresAt": expires_at_iso}
 
 
-@router.post("/reservations/{reservation_id}/release", status_code=200)
-async def release_reservation(reservation_id: str, db: Session = Depends(get_db)) -> dict:
+@router.delete("/reservations/{reservation_id}", status_code=200)
+async def delete_reservation(reservation_id: str, db: Session = Depends(get_db)) -> dict:
     # Find all events and free seats with this reservation_id
     events = db.query(EventEntity).all()
     released = []
@@ -338,8 +338,8 @@ async def release_reservation(reservation_id: str, db: Session = Depends(get_db)
     return {"reservationId": reservation_id, "released": released}
 
 
-@router.get("/events/{event_id}/stream")
-async def stream_event(event_id: str):
+@router.get("/events/{event_id}/updates")
+async def stream_event_updates(event_id: str):
     """Server-Sent Events endpoint that streams seatmap updates for an event."""
     q: asyncio.Queue = asyncio.Queue()
     state.streams.setdefault(event_id, []).append(q)
@@ -372,9 +372,9 @@ async def stream_event(event_id: str):
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
-@router.post("/tickets/verify", response_model=TicketVerifyResponse)
- # Validate a per-seat ticket for a specific event and seat confirmed state.
-async def verify_ticket(req: TicketVerifyRequest, db: Session = Depends(get_db)) -> TicketVerifyResponse:
+@router.post("/ticket-validations", response_model=TicketVerifyResponse)
+# Validate a per-seat ticket for a specific event and seat confirmed state.
+async def validate_ticket(req: TicketVerifyRequest, db: Session = Depends(get_db)) -> TicketVerifyResponse:
     # Basic validation: ticket must exist and belong to the given event
     record = db.query(TicketEntity).filter(TicketEntity.id == req.ticketId).first()
     if record is None:

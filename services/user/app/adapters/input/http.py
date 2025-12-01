@@ -85,7 +85,7 @@ async def login(req: LoginRequest, db: Session = Depends(get_db)) -> dict:
     return {"token": token, "userId": str(found.id)}
 
 
-@router.get("/verify")
+@router.get("/email-verifications/{token}")
 async def verify_user(token: str, db: Session = Depends(get_db)) -> RedirectResponse:
     """Verify a user by token. If successful, mark user as verified and redirect to the frontend homepage."""
     user = db.query(User).filter(User.verification_token == token).first()

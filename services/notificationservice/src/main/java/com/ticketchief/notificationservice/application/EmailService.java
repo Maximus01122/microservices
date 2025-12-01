@@ -4,14 +4,8 @@ import com.ticketchief.notificationservice.port.output.InvoiceFetcherPort;
 import com.ticketchief.notificationservice.port.output.SendEmailPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.UrlResource;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.charset.StandardCharsets;
 
 @Service
 public class EmailService {
@@ -44,7 +38,7 @@ public class EmailService {
     public void sendVerification(String to, String token) {
         try {
             String subject = "Please verify your TicketChief account";
-            String verificationLink = String.format("%s/verify?token=%s", userBaseUrl, token);
+            String verificationLink = String.format("%s/email-verifications/%s", userBaseUrl, token);
             String body = "Welcome to TicketChief!\n\nPlease verify your email by clicking the link below:\n" + verificationLink;
             sendEmailPort.send(to, subject, body, null, null);
             log.info("Verification email sent to {}", to);
