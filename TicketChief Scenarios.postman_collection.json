@@ -1,0 +1,356 @@
+{
+	"info": {
+		"_postman_id": "bfcf9020-bec3-4323-967e-a3880e32ce3d",
+		"name": "TicketChief Scenarios",
+		"description": "TicketChief end-to-end scenarios with folder grouping.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Scenario 1 - Account Onboarding",
+			"item": [
+				{
+					"name": "Register User",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const body = pm.response.json();",
+									"pm.collectionVariables.set('userId', body.id);",
+									"pm.collectionVariables.set('verificationToken', body.verificationToken || '');"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"{{userEmail}}\",\n  \"name\": \"Demo User\",\n  \"password\": \"{{userPassword}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/users",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"users"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Login User",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"{{userEmail}}\",\n  \"password\": \"{{userPassword}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/login",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"login"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Scenario 2 - Organizer Creates Event",
+			"item": [
+				{
+					"name": "Create Event",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.collectionVariables.set('eventId', pm.response.json().id);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Rock Night\",\n  \"rows\": 5,\n  \"cols\": 8,\n  \"basePriceCents\": 15000,\n  \"userId\": \"{{userId}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/events",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"events"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "List Events",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/events",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"events"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Scenario 3 - Customer Reservation & Cart",
+			"item": [
+				{
+					"name": "Create Reservation",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const body = pm.response.json();",
+									"pm.collectionVariables.set('reservationId', body.reservationId);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userId\": \"{{userId}}\",\n  \"seats\": [\"A1\",\"A2\",\"A3\"]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/events/{{eventId}}/reservations",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"events",
+								"{{eventId}}",
+								"reservations"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Order",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.collectionVariables.set('orderId', pm.response.json().id);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userId\": \"{{userId}}\",\n  \"status\": \"IN_CART\",\n  \"items\": [\n    {\"eventId\": \"{{eventId}}\", \"seatId\": \"A1\", \"unitPriceCents\": 15000, \"reservationId\": \"{{reservationId}}\"},\n    {\"eventId\": \"{{eventId}}\", \"seatId\": \"A2\", \"unitPriceCents\": 13500, \"reservationId\": \"{{reservationId}}\"},\n    {\"eventId\": \"{{eventId}}\", \"seatId\": \"A3\", \"unitPriceCents\": 12150, \"reservationId\": \"{{reservationId}}\"}\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/orders",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"orders"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Scenario 4 - Successful Purchase",
+			"item": [
+				{
+					"name": "Finalize Order",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const body = pm.response.json();",
+									"pm.collectionVariables.set('correlationId', body.correlationId || body.correlation_id || '');"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/orders/finalize/{{orderId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"orders",
+								"finalize",
+								"{{orderId}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Payment Attempt (Success)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"cardNumber\": \"4242424242424242\",\n  \"cardHolder\": \"Demo User\",\n  \"cardCvv\": \"123\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/payment-sessions/{{correlationId}}/attempt",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"payment-sessions",
+								"{{correlationId}}",
+								"attempt"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Scenario 5 - Payment Failure",
+			"item": [
+				{
+					"name": "Payment Attempt (Failure 666)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"cardNumber\": \"666\",\n  \"cardHolder\": \"Fraud Test\",\n  \"cardCvv\": \"123\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/payment-sessions/{{correlationId}}/attempt",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"payment-sessions",
+								"{{correlationId}}",
+								"attempt"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:3000/api"
+		},
+		{
+			"key": "userEmail",
+			"value": "demo@example.com"
+		},
+		{
+			"key": "userPassword",
+			"value": "Password123!"
+		},
+		{
+			"key": "userId",
+			"value": ""
+		},
+		{
+			"key": "verificationToken",
+			"value": ""
+		},
+		{
+			"key": "eventId",
+			"value": ""
+		},
+		{
+			"key": "reservationId",
+			"value": ""
+		},
+		{
+			"key": "orderId",
+			"value": ""
+		},
+		{
+			"key": "correlationId",
+			"value": ""
+		}
+	]
+}
