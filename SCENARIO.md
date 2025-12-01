@@ -1,121 +1,146 @@
-# TicketChief: Full Integration Scenario
+# TicketChief Scenarios
 
-This document describes the complete end-to-end scenario supported by the integrated TicketChief platform.
-
-The system allows users to register, create events, reserve seats, pay for orders, receive invoices/tickets via email, and verify tickets.
+The TicketChief platform combines five microservices (User, Event-Ticket, Order, Payment, Notification) plus a React frontend.
 
 ---
 
-## Prerequisites
+## Environment Checklist
 
-1.  Start the entire stack:
-    ```bash
-    docker-compose up --build
-    ```
-2.  Access the Frontend UI: **[http://localhost:3000](http://localhost:3000)**
-3.  Other Tools:
-    *   **RabbitMQ Management:** [http://localhost:15672](http://localhost:15672) (user/password)
-    *   **MailHog (Email):** [http://localhost:8025](http://localhost:8025)
-    *   **PostgreSQL:** Port 5432
+1. Start every dependency:
+   ```bash
+   docker compose up --build
+   ```
+2. Frontend UI: [http://localhost:3000](http://localhost:3000) (proxying to each backend at `/api/**`)
+3. Supporting tools:
+   - RabbitMQ admin: [http://localhost:15672](http://localhost:15672) (user/user)
+   - MailHog for outbound email: [http://localhost:8025](http://localhost:8025)
+   - PostgreSQL: host `ticketchief-db`, port `5432`, db `ticketchief`, user `user`
+4. REST base URL for curl samples: `http://localhost:3000/api`. This is the frontend dev server acting as a proxy. If you prefer to hit services directly, use: User `http://localhost:3002`, Event-Ticket `http://localhost:3001`, Order `http://localhost:8080`, Payment `http://localhost:8082`, Notification `http://localhost:8081`.
 
----
-
-## End-to-End Flow (Using Frontend UI)
-
-The easiest way to test the integration is via the React Frontend.
-
-1.  **Register User:**
-    *   Go to the **Register** tab.
-    *   Enter Name and Email.
-    *   Click Register.
-    *   *Backend Action:* Calls `POST /api/users`.
-
-2.  **Login:**
-    *   Switch to **Login** tab.
-    *   Enter your Email.
-    *   Click Login.
-    *   *Backend Action:* Calls `POST /api/login`.
-
-3.  **Create Event:**
-    *   In the sidebar, enter "Rock Concert", Rows: 5, Cols: 10.
-    *   Click "Create Event".
-    *   *Backend Action:* Calls `POST /api/events`.
-
-4.  **Reserve Seats:**
-    *   Load the event using the ID (if not auto-loaded).
-    *   Click on seats (Green = Available) to select them (Blue).
-    *   Click "Reserve Selected Seats".
-*   *Backend Action:* Calls `POST /api/events/{id}/reservations` (Event Service) -> `POST /api/orders` (Order Service creates cart).
-    *   *Effect:* Seats turn Yellow (Reserved).
-
-5.  **Pay & Finalize:**
-    *   In the Cart section, click "Pay & Finalize".
-    *   *Backend Action:* Calls `POST /api/orders/finalize/{id}`.
-    *   *Process:*
-        *   Order Service publishes `payment.requested`.
-        *   Payment Service processes payment -> publishes `payment.processed`.
-        *   Order Service receives `payment.processed`:
-            *   Publishes `payment.validated` (for seat confirmation).
-            *   Publishes `email.send` (for invoice).
-        *   Event Service receives `payment.validated` -> Confirms seats (Persisted in DB).
-        *   Notification Service receives `email.send` -> Sends email via MailHog.
-
-6.  **Verify Result:**
-    *   **Frontend:** The seats should turn Red (Confirmed) automatically after polling.
-    *   **Email:** Check [http://localhost:8025](http://localhost:8025) for the invoice email.
+Environment variables already point services at the `ticketchief` RabbitMQ exchange and the shared queues defined in `docker-compose.yml`.
 
 ---
 
-## Manual API Walkthrough (cURL)
+## Scenario 1 – Account Onboarding & Email Verification
 
-If you prefer to test individual services via terminal:
+**Supported behavior:** create a customer account, trigger an email verification workflow, and validate the token via REST.
 
-### 1. Create User (User Service)
-```bash
-curl -X POST http://localhost/api/users \
-  -H "Content-Type: application/json" \
-  -d '{"email": "demo@test.com", "name": "Demo User"}'
-```
-*Copy the `id` returned (USER_ID).*
+1. Register the account (User Service):
+   ```bash
+   curl -X POST http://localhost:3000/api/users \
+     -H "Content-Type: application/json" \
+     -d '{"email":"demo+user@example.com","name":"Demo User","password":"Secret123!"}'
+   ```
+   - User service persists the profile, hashes the password, and publishes `user.email.verification.requested` (RabbitMQ exchange `ticketchief`, routing key `user.email.verification.requested`).
+2. MailHog receives a message from Notification Service with a link such as `http://localhost:3000/email-verifications/<TOKEN>`.
+3. Verify the account (User Service):
+   ```bash
+   curl -I http://localhost:3000/api/email-verifications/<TOKEN>
+   ```
+   - FastAPI marks `is_verified=true` and redirects to the frontend.
+4. Login (optional REST call used by the frontend to fetch a session token):
+   ```bash
+   curl -X POST http://localhost:3000/api/login \
+     -H "Content-Type: application/json" \
+     -d '{"email":"demo+user@example.com","password":"Secret123!"}'
+   ```
 
-### 2. Create Event (Event Service)
-```bash
-curl -X POST http://localhost/api/events \
-  -H "Content-Type: application/json" \
-  -d '{"name": "API Concert", "rows": 5, "cols": 5, "userId": "<USER_ID>"}'
-```
-*Copy the `id` returned (EVENT_ID).*
+---
 
-### 3. Create Reservation (Event Service)
-```bash
-curl -X POST http://localhost/api/events/<EVENT_ID>/reservations \
-  -H "Content-Type: application/json" \
-  -d '{"userId": "<USER_ID>", "seats": ["A1", "A2"]}'
-```
+## Scenario 2 – Organizer Creates an Event
 
-### 4. Create Order (Order Service)
-```bash
-curl -X POST http://localhost/api/orders \
-  -H "Content-Type: application/json" \
-  -d '{
-    "userId": "<USER_ID>",
-    "status": "IN_CART",
-    "items": [
-        { "eventId": "<EVENT_ID>", "seatId": "A1", "unitPriceCents": 1000 },
-        { "eventId": "<EVENT_ID>", "seatId": "A2", "unitPriceCents": 1000 }
-    ]
-}'
-```
-*Copy `id` (ORDER_ID).*
+**Supported behavior:** a verified organizer configures a new venue layout.
 
-### 5. Finalize & Pay (Order Service)
-```bash
-curl -X POST http://localhost/api/orders/finalize/<ORDER_ID>
-```
+1. Create the event (Event-Ticket Service):
+   ```bash
+   curl -X POST http://localhost:3000/api/events \
+     -H "Content-Type: application/json" \
+     -d '{
+       "name":"Rock Night",
+       "rows":5,
+       "cols":8,
+       "basePriceCents":15000,
+       "userId":"<ORGANIZER_USER_ID>"
+     }'
+   ```
+   - Seats plus pricing tiers are persisted in PostgreSQL (JSONB columns).
+2. List events to confirm it appears:
+   ```bash
+   curl http://localhost:3000/api/events
+   ```
+   - Frontend also opens an SSE connection: `GET /api/events/<EVENT_ID>/updates` for live seat status streaming.
 
-### 6. Verify (Event Service)
-```bash
-curl http://localhost/api/events/<EVENT_ID>
-```
-*Seats A1 and A2 should now be "confirmed".*
+---
+
+## Scenario 3 – Customer Reserves Seats & Builds a Cart
+
+**Supported behavior:** hold seats temporarily, then mirror the hold inside the Order Service as cart items.
+
+1. Reserve seats (Event-Ticket Service):
+   ```bash
+   curl -X POST http://localhost:3000/api/events/<EVENT_ID>/reservations \
+     -H "Content-Type: application/json" \
+     -d '{"userId":"<BUYER_ID>","seats":["A1","A2","A3"]}'
+   ```
+   - Response includes `reservationId` and ISO expiry.
+   - Event Service publishes `seat.reserved` to RabbitMQ and pushes a `"reserved"` payload to any SSE listeners.
+2. Create an order/cart (Order Service):
+   ```bash
+   curl -X POST http://localhost:3000/api/orders \
+     -H "Content-Type: application/json" \
+     -d '{
+       "userId":"<BUYER_ID>",
+       "status":"IN_CART",
+       "items":[
+         {"eventId":"<EVENT_ID>","seatId":"A1","unitPriceCents":15000,"reservationId":"<RES_ID>"},
+         {"eventId":"<EVENT_ID>","seatId":"A2","unitPriceCents":13500,"reservationId":"<RES_ID>"},
+         {"eventId":"<EVENT_ID>","seatId":"A3","unitPriceCents":12150,"reservationId":"<RES_ID>"}
+       ]
+     }'
+   ```
+   - Order Service stores each item with the reservation metadata so it can later confirm and release seats.
+
+---
+
+## Scenario 4 – Successful Purchase & Ticket Delivery
+
+**Supported behavior:** collect card data, run the payment simulator, issue tickets with QR codes, and deliver an invoice email.
+
+1. Finalize order (Order Service):
+   ```bash
+   curl -X POST http://localhost:3000/api/orders/finalize/<ORDER_ID>
+   ```
+   - Order Service emits `payment.requested` (routing key `payment.requested`).
+2. Payment Service handles the request:
+   - Creates a payment session, simulates processor behavior, and emits `payment.processed` followed by `payment.validated` when the simulator marks it successful (probability defined by `app.payment.simulator.success-rate`).
+3. Event-Ticket Service consumes `payment.validated`:
+   - Seats change from `reserved` to `confirmed`.
+   - Tickets are persisted, QR codes generated (Python `qrcode` lib), and `ticket.created` is published.
+4. Order Service consumes `ticket.created`:
+   - Each cart item gains `ticketId` and `ticketQr`.
+   - Once all tickets exist, the PDF invoice renderer embeds the QR images and Notification Service publishes `email.send`.
+5. MailHog shows the invoice email with embedded QR codes; SSE clients receive `"confirmed"` seat updates automatically.
+
+---
+
+## Scenario 5 – Payment Failure with Card `666`
+
+**Supported behavior:** decline the payment, cancel the order, and release held seats when the buyer uses the known-bad card number.
+
+1. Run the standard reservation + cart steps (Scenario 3).
+2. Finalize the order but send a failing card to the Payment Service:
+   ```bash
+   curl -X POST http://localhost:3000/api/payment-sessions/<CORRELATION_ID>/attempt \
+     -H "Content-Type: application/json" \
+     -d '{"cardNumber":"666","cardHolder":"Fraudulent User","cardCvv":"123"}'
+   ```
+   - The Payment Service contains a guard clause: if `cardNumber.equals("666")`, it immediately marks the attempt as `FAILED` and logs the decline.
+3. Order Service reacts to the failed `payment.processed` event:
+   - Publishes `seat.release-requested` (HTTP fallback is also available) so Event-Ticket can free the reservation.
+   - `DELETE /api/reservations/<RES_ID>` is also invoked by the Order Service’s HTTP adapter for deterministic cleanup.
+4. Event-Ticket Service broadcasts `"released"` payloads; the frontend sees the seats return to green, and no invoice email is sent.
+
+---
+
+These five scenarios cover every critical cross-service interaction: synchronous REST calls (user, events, orders, reservations, ticket validations) plus asynchronous RabbitMQ events (verification, payment, ticket issuance, notifications). Following them end-to-end demonstrates the platform’s happy path and a realistic negative path without touching internal code.***
 
