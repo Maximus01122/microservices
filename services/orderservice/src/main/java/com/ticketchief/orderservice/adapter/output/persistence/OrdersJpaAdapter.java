@@ -6,6 +6,8 @@ import com.ticketchief.orderservice.domain.Order;
 import com.ticketchief.orderservice.port.output.OrdersRepositoryPort;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 
 @Component
 public class OrdersJpaAdapter implements OrdersRepositoryPort {
@@ -24,6 +26,11 @@ public class OrdersJpaAdapter implements OrdersRepositoryPort {
 
     @Override
     public Order save(Order order) {
+        // ensure timestamps are set so DB NOT NULL columns are populated
+        if (order.getCreatedAt() == null) {
+            order.setCreatedAt(OffsetDateTime.now(ZoneOffset.UTC));
+        }
+        order.setUpdatedAt(OffsetDateTime.now(ZoneOffset.UTC));
         return orderJpaRepository.save(OrderEntity.fromDomain(order)).toDomain();
     }
 

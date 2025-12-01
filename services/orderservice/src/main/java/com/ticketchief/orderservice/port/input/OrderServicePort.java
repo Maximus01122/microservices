@@ -10,7 +10,7 @@ import java.util.List;
 public interface OrderServicePort {
         Order placeOrder(Order order);
         void cancelOrder(Long orderId);
-        void finalizeOrder(Long orderId);
+        String finalizeOrder(Long orderId);
         Order addItem(Long orderId, CartItem item);
         Order removeItem(Long orderId, CartItem item);
         Order findOrder(Long orderId);

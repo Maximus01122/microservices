@@ -3,6 +3,8 @@ import uuid
 from typing import Dict, List
 
 from fastapi import APIRouter, HTTPException, Depends
+from fastapi.responses import StreamingResponse
+import asyncio, json
 from sqlalchemy.orm import Session
 
 from app import state
@@ -15,7 +17,7 @@ from app.domain.model import (
     TicketVerifyResponse,
 )
 from app.domain.entity import Event as EventEntity, Ticket as TicketEntity
-from app.config.database import get_db
+from app.config.database import get_db, SessionLocal
 
 router = APIRouter()
 
@@ -29,6 +31,17 @@ async def list_events(db: Session = Depends(get_db)) -> List[EventView]:
     records = db.query(EventEntity).order_by(EventEntity.created_at.desc()).all()
     result: List[EventView] = []
     for event in records:
+        # compute per-seat prices from base_price_cents (row 1 = base, row 2 = base*0.9, ...)
+        base = int(getattr(event, "base_price_cents", 0) or 0)
+        seat_prices = {}
+        if base and event.rows:
+            letters = list(__import__("string").ascii_uppercase)[: event.rows]
+            for r_index, letter in enumerate(letters, start=1):
+                multiplier = 0.9 ** (r_index - 1)
+                row_price = int(round(base * multiplier))
+                for c in range(1, (event.cols or 0) + 1):
+                    seat_prices[f"{letter}{c}"] = row_price
+
         result.append(
             EventView(
                 id=str(event.id),
@@ -41,6 +54,8 @@ async def list_events(db: Session = Depends(get_db)) -> List[EventView]:
                 creator_user_id=str(event.creator_user_id) if event.creator_user_id else None,
                 status=event.status or 'DRAFT',
                 seats=event.seats,
+                basePriceCents=base,
+                seatPrices=seat_prices,
                 created_at=event.created_at,
                 updated_at=event.updated_at,
             )
@@ -66,6 +81,7 @@ async def create_event(req: EventCreate, db: Session = Depends(get_db)) -> Event
         rows=req.rows, 
         cols=req.cols, 
         creator_user_id=req.userId,
+        base_price_cents=getattr(req, 'basePriceCents', 0),
         seats=seats,
         reservation_expires={},
         reservation_holder={}
@@ -74,6 +90,17 @@ async def create_event(req: EventCreate, db: Session = Depends(get_db)) -> Event
     db.commit()
     db.refresh(event)
     
+    # compute seat prices to include in response
+    base = int(getattr(event, "base_price_cents", 0) or 0)
+    seat_prices = {}
+    if base and event.rows:
+        letters = list(__import__("string").ascii_uppercase)[: event.rows]
+        for r_index, letter in enumerate(letters, start=1):
+            multiplier = 0.9 ** (r_index - 1)
+            row_price = int(round(base * multiplier))
+            for c in range(1, (event.cols or 0) + 1):
+                seat_prices[f"{letter}{c}"] = row_price
+
     return EventView(
         id=str(event.id),
         name=event.name,
@@ -85,6 +112,8 @@ async def create_event(req: EventCreate, db: Session = Depends(get_db)) -> Event
         creator_user_id=str(event.creator_user_id) if event.creator_user_id else None,
         status=event.status or 'DRAFT',
         seats=event.seats,
+        basePriceCents=base,
+        seatPrices=seat_prices,
         created_at=event.created_at,
         updated_at=event.updated_at,
     )
@@ -96,6 +125,16 @@ async def get_event(event_id: str, db: Session = Depends(get_db)) -> EventView:
     event = db.query(EventEntity).filter(EventEntity.id == event_id).first()
     if not event:
         raise HTTPException(status_code=404, detail="event not found")
+    base = int(getattr(event, "base_price_cents", 0) or 0)
+    seat_prices = {}
+    if base and event.rows:
+        letters = list(__import__("string").ascii_uppercase)[: event.rows]
+        for r_index, letter in enumerate(letters, start=1):
+            multiplier = 0.9 ** (r_index - 1)
+            row_price = int(round(base * multiplier))
+            for c in range(1, (event.cols or 0) + 1):
+                seat_prices[f"{letter}{c}"] = row_price
+
     return EventView(
         id=str(event.id),
         name=event.name,
@@ -107,6 +146,8 @@ async def get_event(event_id: str, db: Session = Depends(get_db)) -> EventView:
         creator_user_id=str(event.creator_user_id) if event.creator_user_id else None,
         status=event.status or 'DRAFT',
         seats=event.seats,
+        basePriceCents=base,
+        seatPrices=seat_prices,
         created_at=event.created_at,
         updated_at=event.updated_at,
     )
@@ -246,7 +287,89 @@ async def reserve_seats(event_id: str, req: ReserveRequest, db: Session = Depend
         {"eventId": event_id, "seats": normalized_seats, "reservationId": reservation_id},
     )
 
+    # Broadcast to any connected SSE clients for this event
+    try:
+        await state.broadcast_event(event_id, {"type": "reserved", "seats": normalized_seats, "reservationId": reservation_id})
+    except Exception:
+        pass
+
     return {"eventId": event_id, "reserved": normalized_seats, "reservationId": reservation_id, "expiresAt": expires_at_iso}
+
+
+@router.post("/reservations/{reservation_id}/release", status_code=200)
+async def release_reservation(reservation_id: str, db: Session = Depends(get_db)) -> dict:
+    # Find all events and free seats with this reservation_id
+    events = db.query(EventEntity).all()
+    released = []
+    for event in events:
+        current_seats = dict(event.seats)
+        expires = dict(event.reservation_expires or {})
+        holders = dict(event.reservation_holder or {})
+        res_ids = dict(getattr(event, "reservation_ids", {}) or {})
+        changed = False
+        for seat_id, rid in list(res_ids.items()):
+            if rid == reservation_id:
+                # only release if currently reserved
+                if current_seats.get(seat_id) == 'reserved':
+                    current_seats[seat_id] = 'available'
+                    expires.pop(seat_id, None)
+                    holders.pop(seat_id, None)
+                    res_ids.pop(seat_id, None)
+                    changed = True
+                    released.append({"eventId": str(event.id), "seat": seat_id})
+        if changed:
+            event.seats = current_seats
+            event.reservation_expires = expires
+            event.reservation_holder = holders
+            try:
+                event.reservation_ids = res_ids
+            except Exception:
+                pass
+            db.commit()
+            # Broadcast release for this event
+            try:
+                # collect seats released for this event
+                seats_for_event = [r["seat"] for r in released if r.get("eventId") == str(event.id)]
+                if seats_for_event:
+                    await state.broadcast_event(str(event.id), {"type": "released", "seats": seats_for_event})
+            except Exception:
+                pass
+
+    return {"reservationId": reservation_id, "released": released}
+
+
+@router.get("/events/{event_id}/stream")
+async def stream_event(event_id: str):
+    """Server-Sent Events endpoint that streams seatmap updates for an event."""
+    q: asyncio.Queue = asyncio.Queue()
+    state.streams.setdefault(event_id, []).append(q)
+
+    async def event_generator():
+        try:
+            # initial snapshot
+            db = SessionLocal()
+            try:
+                event = db.query(EventEntity).filter(EventEntity.id == event_id).first()
+                if event:
+                    snapshot = {"type": "snapshot", "seats": event.seats}
+                    yield f"data: {json.dumps(snapshot)}\n\n"
+                else:
+                    yield f"data: {json.dumps({"type": "error", "error": "event not found"})}\n\n"
+            finally:
+                db.close()
+
+            while True:
+                payload = await q.get()
+                yield f"data: {json.dumps(payload)}\n\n"
+        except asyncio.CancelledError:
+            raise
+        finally:
+            try:
+                state.streams[event_id].remove(q)
+            except Exception:
+                pass
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @router.post("/tickets/verify", response_model=TicketVerifyResponse)

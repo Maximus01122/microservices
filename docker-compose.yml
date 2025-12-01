@@ -101,10 +101,10 @@ services:
       APP_RABBIT_PAYMENT_EXCHANGE: ticketchief
       APP_RABBIT_PAYMENT_ROUTING_KEY: payment.requested
       APP_RABBIT_PROCESSED_ROUTING_KEY: payment.processed
-      
-      # Notifications
-      APP_NOTIFICATION_EXCHANGE: ticketchief
-      APP_NOTIFICATION_ROUTING_KEY: email.send
+
+      # Notifications (use property names expected by the apps)
+      APP_RABBIT_NOTIFICATION_EXCHANGE: ticketchief
+      APP_RABBIT_NOTIFICATION_ROUTING_KEY: email.send
       
     ports:
       - "8080:8080"
@@ -172,7 +172,8 @@ services:
       SERVER_PORT: 8082
       
       APP_NOTIFICATION_EXCHANGE: ticketchief
-      APP_NOTIFICATION_ROUTING_KEY: email.send
+      APP_RABBIT_NOTIFICATION_EXCHANGE: ticketchief
+      APP_RABBIT_NOTIFICATION_ROUTING_KEY: email.send
       
       ORDER_SERVICE_BASE_URL: http://orderservice:8080
       # Postgres connection for Spring Boot
@@ -203,6 +204,7 @@ services:
       - USER_SERVICE_URL=http://user:3002
       - EVENT_SERVICE_URL=http://event-ticket:3001
       - ORDER_SERVICE_URL=http://orderservice:8080
+      - PAYMENT_SERVICE_URL=http://paymentservice:8081
       - WDS_SOCKET_PORT=0 # Fix for websocket HMR in some docker setups
     stdin_open: true
     tty: true

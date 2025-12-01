@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS events (
   seats JSONB,
   reservation_expires JSONB,
   reservation_holder JSONB,
+  reservation_ids JSONB,
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
 );

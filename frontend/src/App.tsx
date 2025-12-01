@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { Container, Navbar, Nav, Card, Button, Form, Row, Col, Tab, Tabs, Alert, Badge, Modal } from 'react-bootstrap';
 import axios from 'axios';
@@ -18,6 +18,8 @@ interface Event {
   seats: Record<string, string>; // seatId -> status
   description?: string | null;
   venue?: string | null;
+  basePriceCents?: number;
+  seatPrices?: Record<string, number>;
 }
 
 interface CartItem {
@@ -49,6 +51,7 @@ const App: React.FC = () => {
   const [evtName, setEvtName] = useState('');
   const [evtRows, setEvtRows] = useState(5);
   const [evtCols, setEvtCols] = useState(10);
+  const [evtBasePrice, setEvtBasePrice] = useState('10.00');
   const [loadEvtId, setLoadEvtId] = useState('');
 
   // App Data
@@ -62,6 +65,23 @@ const App: React.FC = () => {
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [modalOrderId, setModalOrderId] = useState<number | null>(null);
   const [modalReservationId, setModalReservationId] = useState<string | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
+
+  // Cleanup SSE on unmount
+  useEffect(() => {
+    return () => {
+      try {
+        if (eventSourceRef.current) {
+          eventSourceRef.current.close();
+          eventSourceRef.current = null;
+        }
+      } catch (e) {}
+    };
+  }, []);
+  // Payment form
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardCvv, setCardCvv] = useState('');
+  const [cardHolder, setCardHolder] = useState('');
 
   // Show verification success/failure based on URL query param (?verified=true)
   useEffect(() => {
@@ -125,6 +145,13 @@ const App: React.FC = () => {
     setToken(null);
     setCurrentEvent(null);
     setCurrentOrderId(null);
+    // close SSE if open
+    try {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+    } catch (e) {}
     setActiveTab('login');
   };
 
@@ -157,11 +184,13 @@ const App: React.FC = () => {
     if (!user) return;
     setError(null); setSuccess(null);
     try {
+      const basePriceCents = Math.round((parseFloat(evtBasePrice || '0') || 0) * 100);
       const res = await axios.post(`${API_BASE}/api/events`, {
         name: evtName,
         rows: evtRows,
         cols: evtCols,
-        userId: user.id
+        userId: user.id,
+        basePriceCents: basePriceCents
       });
       setSuccess(`Event Created! ID: ${res.data.id}`);
       setLoadEvtId(res.data.id);
@@ -178,6 +207,41 @@ const App: React.FC = () => {
       const res = await axios.get(`${API_BASE}/api/events/${id}`);
       setCurrentEvent(res.data);
       setSelectedSeats([]);
+      // open SSE for this event
+      try {
+        if (eventSourceRef.current) {
+          eventSourceRef.current.close();
+          eventSourceRef.current = null;
+        }
+        const es = new EventSource(`/api/events/${id}/stream`);
+        es.onmessage = (evt) => {
+          try {
+            const payload = JSON.parse(evt.data);
+            if (payload.type === 'snapshot') {
+              setCurrentEvent(prev => prev ? { ...prev, seats: payload.seats } : prev);
+            } else if (payload.type === 'reserved' || payload.type === 'released' || payload.type === 'confirmed') {
+              setCurrentEvent(prev => {
+                if (!prev) return prev;
+                const seats = { ...(prev.seats || {}) };
+                for (const s of payload.seats || []) {
+                  if (payload.type === 'reserved') seats[s] = 'reserved';
+                  if (payload.type === 'released') seats[s] = 'available';
+                  if (payload.type === 'confirmed') seats[s] = 'confirmed';
+                }
+                return { ...prev, seats };
+              });
+            }
+          } catch (e) {
+            // ignore parse errors
+          }
+        };
+        es.onerror = () => {
+          // on error, close and clear; reconnection is managed by browser
+        };
+        eventSourceRef.current = es;
+      } catch (e) {
+        // ignore SSE connection errors
+      }
     } catch (err: any) {
       setError('Event not found');
     }
@@ -260,12 +324,15 @@ const App: React.FC = () => {
       const reservationId = reserveRes.data?.reservationId;
 
       // 2. Create Order (attach reservationId to each cart item so it can be validated later)
-      const items: CartItem[] = selectedSeats.map(seatId => ({
-        eventId: currentEvent.id,
-        seatId: seatId,
-        unitPriceCents: 1000,
-        reservationId: reservationId
-      }));
+      const items: CartItem[] = selectedSeats.map(seatId => {
+        const price = Number(currentEvent.seatPrices?.[seatId] ?? currentEvent.basePriceCents ?? 1000);
+        return ({
+          eventId: currentEvent.id,
+          seatId: seatId,
+          unitPriceCents: price,
+          reservationId: reservationId
+        });
+      });
 
       console.log('reserveSeats: creating order with items', items);
       const orderRes = await axios.post(`${API_BASE}/api/orders`, {
@@ -281,7 +348,8 @@ const App: React.FC = () => {
       setModalReservationId(reservationId ?? null);
       setShowOrderModal(true);
       console.log('Order created:', orderRes.data);
-      setOrderTotal(items.length * 10); // $10 each
+      const totalCents = items.reduce((sum, it) => sum + (it.unitPriceCents * (it as any).quantity || it.unitPriceCents), 0);
+      setOrderTotal(totalCents / 100);
       
       // Refresh map to show reserved
       loadEvent(currentEvent.id);
@@ -298,18 +366,74 @@ const App: React.FC = () => {
     if (!currentOrderId) return;
     setError(null); setSuccess(null);
     try {
-      await axios.post(`${API_BASE}/api/orders/finalize/${currentOrderId}`);
-      setSuccess('Payment Submitted! Processing...');
-      setCurrentOrderId(null);
-      setSelectedSeats([]);
-      
-      // Poll for confirmation
-      let checks = 0;
-      const interval = setInterval(() => {
-        if(currentEvent) loadEvent(currentEvent.id);
-        checks++;
-        if (checks > 5) clearInterval(interval);
-      }, 2000);
+      // 1) Ask orderservice to create a payment session and return a correlationId
+      const res = await axios.post(`${API_BASE}/api/orders/finalize/${currentOrderId}`);
+      const correlationId = res.data?.correlationId || res.data?.correlation_id;
+      if (!correlationId) {
+        setError('Failed to start payment session');
+        return;
+      }
+
+      // 2) Wait for payment session to be created by paymentservice (avoid race)
+      const waitForSession = async (corrId: string, timeoutMs = 8000) => {
+        const start = Date.now();
+        let delay = 150;
+        while (Date.now() - start < timeoutMs) {
+          try {
+            const r = await axios.get(`${API_BASE}/api/payment-sessions/${corrId}`);
+            if (r.status === 200) return r.data;
+          } catch (e: any) {
+            if (e.response && e.response.status !== 404) throw e;
+            // 404 -> not ready yet; continue retrying
+          }
+          await new Promise(r => setTimeout(r, delay));
+          delay = Math.min(1000, Math.floor(delay * 1.5));
+        }
+        throw new Error('payment session creation timed out');
+      };
+
+      try {
+        await waitForSession(correlationId, 8000);
+      } catch (e) {
+        setError('Payment service not ready, please try again.');
+        return;
+      }
+
+      // 3) Submit a single card attempt to payment service using the correlationId
+      const attemptRes = await axios.post(`${API_BASE}/api/payment-sessions/${correlationId}/attempt`, {
+        cardNumber,
+        cardCvv,
+        cardHolder
+      });
+      const body = attemptRes.data || {};
+      const status = body.status;
+      const attemptsLeft = body.attemptsRemaining ?? 0;
+      const isFinal = !!body.isFinal;
+
+      if (status === 'SUCCESS') {
+        setSuccess('Payment successful!');
+        setCurrentOrderId(null);
+        setSelectedSeats([]);
+        setCardNumber(''); setCardCvv(''); setCardHolder('');
+        loadEvent(currentEvent!.id);
+        return;
+      }
+
+      // If the payment attempt resulted in a final failure, treat it as terminal and refresh seats
+      if (status === 'FAILED' && isFinal) {
+        setError('Payment failed — order cancelled and seats released.');
+        setCurrentOrderId(null);
+        setSelectedSeats([]);
+        setCardNumber(''); setCardCvv(''); setCardHolder('');
+        // Refresh event to pick up released seats
+        if (currentEvent) loadEvent(currentEvent.id);
+        return;
+      }
+
+      if (status === 'FAILED' && attemptsLeft > 0) {
+        setError(`Payment failed. Attempts remaining: ${attemptsLeft}`);
+        return; // allow user to retry by submitting card details again
+      }
     } catch (err: any) {
       setError('Finalize failed');
     }
@@ -484,6 +608,9 @@ const App: React.FC = () => {
                   <Form.Group className="mb-2">
                     <Form.Control type="text" placeholder="Event Name" value={evtName} onChange={e => setEvtName(e.target.value)} />
                   </Form.Group>
+                  <Form.Group className="mb-2">
+                    <Form.Control type="number" step="0.01" placeholder="Base price (EUR)" value={evtBasePrice} onChange={e => setEvtBasePrice(e.target.value)} />
+                  </Form.Group>
                   <Row className="g-2 mb-2">
                     <Col><Form.Control type="number" placeholder="Rows" value={evtRows} onChange={e => setEvtRows(parseInt(e.target.value))} /></Col>
                     <Col><Form.Control type="number" placeholder="Cols" value={evtCols} onChange={e => setEvtCols(parseInt(e.target.value))} /></Col>
@@ -541,6 +668,18 @@ const App: React.FC = () => {
                   <Card.Body>
                     <p className="mb-2"><strong>Order ID:</strong> {currentOrderId}</p>
                     <p className="mb-3"><strong>Total:</strong> ${orderTotal.toFixed(2)}</p>
+                    <Form.Group className="mb-2">
+                      <Form.Label>Cardholder Name</Form.Label>
+                      <Form.Control type="text" value={cardHolder} onChange={e => setCardHolder(e.target.value)} placeholder="Name on card" />
+                    </Form.Group>
+                    <Form.Group className="mb-2">
+                      <Form.Label>Card Number</Form.Label>
+                      <Form.Control type="text" value={cardNumber} onChange={e => setCardNumber(e.target.value)} placeholder="4242424242424242" />
+                    </Form.Group>
+                    <Form.Group className="mb-3">
+                      <Form.Label>CVV</Form.Label>
+                      <Form.Control type="text" value={cardCvv} onChange={e => setCardCvv(e.target.value)} placeholder="123" />
+                    </Form.Group>
                     <Button variant="warning" className="w-100 fw-bold" onClick={finalizeOrder}>Pay & Finalize</Button>
                   </Card.Body>
                 </Card>

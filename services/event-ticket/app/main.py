@@ -83,6 +83,7 @@ async def lifespan(app: FastAPI):
                         expires = dict(event_entity.reservation_expires or {})
                         
                         changed = False
+                        released_seats = []
                         import time
                         now = time.time()
                         
@@ -110,11 +111,17 @@ async def lifespan(app: FastAPI):
                                 current_seats[seat_id] = "available"
                                 expires.pop(seat_id, None)
                                 changed = True
+                                released_seats.append(seat_id)
                         
                         if changed:
                             event_entity.seats = current_seats
                             event_entity.reservation_expires = expires
                             db.commit()
+                            # Broadcast released seats to SSE clients
+                            try:
+                                await state.broadcast_event(str(event_entity.id), {"type": "released", "seats": released_seats})
+                            except Exception:
+                                pass
                 finally:
                     db.close()
                     

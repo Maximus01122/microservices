@@ -26,7 +26,7 @@ public class CartItemEntity {
     private long unitPriceCents;
 
     @Column(name = "ticket_id")
-    private String ticketId;
+    private UUID ticketId;
 
     @Column(length = 4096)
     private String ticketQr;
@@ -48,7 +48,11 @@ public class CartItemEntity {
         }
         e.setSeatId(cartItem.seatId());
         e.setUnitPriceCents(cartItem.unitPriceCents());
-        e.setTicketId(cartItem.ticketId());
+        try {
+            e.setTicketId(cartItem.ticketId());
+        } catch (IllegalArgumentException ex) {
+            e.setTicketId((String) null);
+        }
         e.setTicketQr(cartItem.ticketQr());
         try {
             e.setReservationId(cartItem.reservationId() == null ? null : UUID.fromString(cartItem.reservationId()));
@@ -78,8 +82,16 @@ public class CartItemEntity {
         this.reservationId = reservationId;
     }
 
+    public void setOrder(OrderEntity order) {
+        this.order = order;
+    }
+
     public void setTicketId(String ticketId) {
-        this.ticketId = ticketId;
+        try {
+            this.ticketId = ticketId == null ? null : UUID.fromString(ticketId);
+        } catch (IllegalArgumentException ex) {
+            this.ticketId = null;
+        }
     }
 
     public void setTicketQr(String ticketQr) {
@@ -87,6 +99,6 @@ public class CartItemEntity {
     }
 
     public CartItem toDomain() {
-        return new CartItem(id, eventId == null ? null : eventId.toString(), seatId, unitPriceCents, reservationId == null ? null : reservationId.toString(), ticketId, ticketQr);
+        return new CartItem(id, eventId == null ? null : eventId.toString(), seatId, unitPriceCents, reservationId == null ? null : reservationId.toString(), ticketId == null ? null : ticketId.toString(), ticketQr);
     }
 }

@@ -54,5 +54,13 @@ module.exports = function(app) {
       // No rewrite needed for orders as the controller maps /api/orders
     })
   );
+  // Proxy for Payment Service (payment attempts)
+  app.use(
+    '/api/payment-sessions',
+    createProxyMiddleware({
+      target: process.env.PAYMENT_SERVICE_URL || 'http://localhost:8081',
+      changeOrigin: true,
+    })
+  );
 };
 

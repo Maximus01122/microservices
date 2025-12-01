@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, DateTime, func, text
+from sqlalchemy import Column, String, Integer, DateTime, func, text, BigInteger
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from app.config.database import Base
 
@@ -19,6 +19,7 @@ class Event(Base):
     reservation_expires = Column(JSONB, nullable=True)
     reservation_holder = Column(JSONB, nullable=True)
     reservation_ids = Column(JSONB, nullable=True)
+    base_price_cents = Column(BigInteger, nullable=False, server_default=text('0'))
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 

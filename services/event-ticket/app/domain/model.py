@@ -14,6 +14,7 @@ class EventCreate(BaseModel):
     rows: int = Field(..., ge=1, le=26)  # up to Z
     cols: int = Field(..., ge=1, le=50)
     userId: str = Field(..., min_length=1)
+    basePriceCents: int = Field(0, ge=0)
     description: Optional[str] = None
     venue: Optional[str] = None
     start_time: Optional[datetime] = None
@@ -37,6 +38,8 @@ class EventView(BaseModel):
     creator_user_id: Optional[str] = None
     status: str
     seats: Dict[str, str]  # seatId -> status: available|reserved|confirmed
+    basePriceCents: int = 0
+    seatPrices: Dict[str, int] = {}
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

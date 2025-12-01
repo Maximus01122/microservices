@@ -6,15 +6,20 @@ import com.ticketchief.common.events.TicketCreatedEvent;
 import com.ticketchief.orderservice.domain.CartItem;
 import com.ticketchief.orderservice.domain.Order;
 import com.ticketchief.orderservice.domain.Order.Status;
-import com.ticketchief.orderservice.port.input.OrderPaymentServicePort;
 import com.ticketchief.orderservice.port.input.OrderServicePort;
-import com.ticketchief.orderservice.port.output.*;
+import com.ticketchief.orderservice.port.input.OrderPaymentServicePort;
+import com.ticketchief.orderservice.port.output.OrdersRepositoryPort;
+import com.ticketchief.orderservice.port.output.PublishEmailRequestedPort;
+import com.ticketchief.orderservice.port.output.PublishPaymentRequestedPort;
+import com.ticketchief.orderservice.port.output.PublishPaymentValidatedPort;
+import com.ticketchief.orderservice.port.output.InvoicePort;
+
+import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -22,20 +27,22 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
-import java.util.Objects;
-
-import static com.ticketchief.orderservice.domain.Order.Status.PAYMENT_PENDING;
-
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 public class OrderService implements OrderServicePort, OrderPaymentServicePort {
+    private final Logger log = LoggerFactory.getLogger(OrderService.class);
     private final OrdersRepositoryPort ordersJpaAdapter;
     private final PublishPaymentRequestedPort paymentPublisher;
     private final PublishEmailRequestedPort emailPublisher;
+    private final com.ticketchief.orderservice.port.output.UserClientPort userClient;
     private final PublishPaymentValidatedPort paymentValidatedPublisher;
     private final InvoicePort invoiceAdapter;
+    private final com.ticketchief.orderservice.port.output.TicketReservationPort ticketReservationPort;
 
     @Value("${app.invoice.storage-dir}")
     private String storageDir;
@@ -43,14 +50,19 @@ public class OrderService implements OrderServicePort, OrderPaymentServicePort {
     public OrderService(OrdersRepositoryPort ordersJpaAdapter,
                         PublishPaymentRequestedPort paymentPublisher,
                         PublishEmailRequestedPort emailPublisher,
+                        com.ticketchief.orderservice.port.output.UserClientPort userClient,
                         PublishPaymentValidatedPort paymentValidatedPublisher,
-                        InvoicePort invoiceAdapter) {
+                        InvoicePort invoiceAdapter,
+                        com.ticketchief.orderservice.port.output.TicketReservationPort ticketReservationPort) {
         this.ordersJpaAdapter = ordersJpaAdapter;
         this.paymentPublisher = paymentPublisher;
         this.emailPublisher = emailPublisher;
+        this.userClient = userClient;
         this.paymentValidatedPublisher = paymentValidatedPublisher;
         this.invoiceAdapter = invoiceAdapter;
+        this.ticketReservationPort = ticketReservationPort;
     }
+
     @Override
     public Order placeOrder(Order order) {
         return ordersJpaAdapter.save(order);
@@ -85,7 +97,7 @@ public class OrderService implements OrderServicePort, OrderPaymentServicePort {
 
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
-                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + order.getId() + ".pdf\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + order.getId() + "\"")
                 .body(pdfBytes);
     }
 
@@ -95,24 +107,42 @@ public class OrderService implements OrderServicePort, OrderPaymentServicePort {
     }
 
     @Override
-    public void finalizeOrder(Long orderId) {
+    public String finalizeOrder(Long orderId) {
+        // publish payment requested and return correlationId so frontend can submit card data to payment service
         Order order = ordersJpaAdapter.findOrderById(orderId);
 
         long amount = order.getItems().stream().mapToLong(CartItem::unitPriceCents).sum();
         double HST_ONTARIO = 0.14;
         amount += (long) (amount * HST_ONTARIO);
 
-        order.setStatus(PAYMENT_PENDING);
+        order.setStatus(Status.PAYMENT_PENDING);
         ordersJpaAdapter.save(order);
-        paymentPublisher.publishPaymentRequested(UUID.randomUUID().toString(), order.getId(), amount);
-    }
 
+        String correlationId = UUID.randomUUID().toString();
+        paymentPublisher.publishPaymentRequested(
+                correlationId,
+                order.getId(),
+                amount
+        );
+        return correlationId;
+    }
 
     @Transactional
     @Override
     public void onPaymentProcessed(PaymentProcessedEvent event) {
         Order order = ordersJpaAdapter.findOrderById(event.orderId());
         if (event.status() == PaymentStatus.SUCCESS) {
+            // idempotency: if we already marked this order PAID, ignore duplicate SUCCESS events
+            if (order.getStatus() == Status.PAID) {
+                log.info("Ignoring duplicate PAYMENT SUCCESS for orderId={}", event.orderId());
+                return;
+            }
+            // if order is not currently awaiting payment, log and ignore to avoid invalid state transitions
+            if (order.getStatus() != Status.PAYMENT_PENDING) {
+                log.warn("Received PAYMENT SUCCESS for orderId={} but order status is {} — ignoring", event.orderId(), order.getStatus());
+                return;
+            }
+
             order.markPaid();
 
             // Group items by eventId to publish validation per event
@@ -133,7 +163,18 @@ public class OrderService implements OrderServicePort, OrderPaymentServicePort {
             });
 
         } else {
-            order.setStatus(Status.FAILED);
+            // Payment failed (final): log, release reservation and delete order
+            log.warn("Received PAYMENT FAILED for orderId={} (reason={}), correlationId={}", event.orderId(), event.reason(), event.correlationId());
+            String reservationId = order.getItems().stream().map(CartItem::reservationId).filter(Objects::nonNull).findFirst().orElse(null);
+            try {
+                if (reservationId != null) {
+                    ticketReservationPort.releaseReservation(reservationId);
+                }
+            } catch (Exception ex) {
+                // log and continue
+            }
+            ordersJpaAdapter.deleteById(order.getId());
+            return;
         }
         ordersJpaAdapter.save(order);
     }
@@ -157,12 +198,24 @@ public class OrderService implements OrderServicePort, OrderPaymentServicePort {
 
         if (order.hasAllTicketsIssued()) {
             InvoicePort.InvoiceResult result = invoiceAdapter.generateInvoice(order);
+            // Resolve user email synchronously via userClient (outside port)
+            String recipient = null;
+            try {
+                recipient = userClient.getUserEmail(order.getUserId());
+            } catch (Exception ex) {
+                log.warn("Failed to resolve user email for userId={}: {}", order.getUserId(), ex.getMessage());
+            }
+            if (recipient == null || recipient.isBlank()) {
+                log.warn("No valid email for userId={} — cannot send invoice for orderId={}", order.getUserId(), order.getId());
+                return;
+            }
+
             emailPublisher.publishEmailRequest(
-                    UUID.randomUUID().toString(),
-                    "fuchsm1@mcmaster.ca",
-                    "Your Invoice",
-                    "Thank you for your purchase. Your tickets are attached as QR codes.",
-                    result.url()
+                UUID.randomUUID().toString(),
+                recipient,
+                "Your Invoice",
+                "Thank you for your purchase. Your tickets are attached as QR codes.",
+                result.url()
             );
         }
     }

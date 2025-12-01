@@ -128,6 +128,11 @@ async def handle_payment_validated(payload: dict) -> None:
                 "seat.confirmed",
                 {"eventId": event_id, "seats": confirmed_seats},
             )
+            # Also notify any SSE clients about the confirmed seats
+            try:
+                await state.broadcast_event(event_id, {"type": "confirmed", "seats": confirmed_seats})
+            except Exception:
+                pass
     except Exception as e:
         print(f"Error handling payment validation: {e}")
         db.rollback()

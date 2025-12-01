@@ -17,6 +17,7 @@ public class PaymentRequestedListener {
 
     @RabbitListener(queues = "${app.rabbit.requested.queue:payments.requested.queue}")
     public void onMessage(PaymentRequestedEvent requestedEvent) {
+        // Create a payment session for this correlationId so frontend can submit card attempts
         PaymentRequest request = new PaymentRequest(requestedEvent.correlationId(), requestedEvent.orderId(), requestedEvent.amountCents());
         processPayment.process(request);
     }
