@@ -30,7 +30,6 @@ The project consists of the following microservices:
     ```bash
     docker-compose up --build
     ```
-    *Note: The first build may take a few minutes to download Maven dependencies and build Docker images.*
 
 2.  **Access the UI:**
     Open [http://localhost:3000](http://localhost:3000) in your browser.
@@ -47,3 +46,4 @@ The project consists of the following microservices:
 ## Usage Scenario
 
 See [SCENARIO.md](SCENARIO.md) for a detailed walkthrough of the end-to-end flow.
+See [TicketChief-Scenarios.postman_collection.json](TicketChief-Scenarios.postman_collection.json) for the Postman collection.

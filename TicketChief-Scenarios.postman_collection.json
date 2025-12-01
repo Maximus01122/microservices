@@ -1,8 +1,8 @@
 {
 	"info": {
 		"_postman_id": "bfcf9020-bec3-4323-967e-a3880e32ce3d",
-		"name": "TicketChief Scenarios",
-		"description": "TicketChief end-to-end scenarios with folder grouping.",
+		"name": "TicketChief-Scenarios",
+		"description": "TicketChief Scenarios",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
