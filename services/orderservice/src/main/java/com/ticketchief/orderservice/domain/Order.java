@@ -3,8 +3,10 @@ package com.ticketchief.orderservice.domain;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 public class Order {
 
@@ -35,7 +37,7 @@ public class Order {
                  @JsonProperty("createdAt") OffsetDateTime createdAt, @JsonProperty("updatedAt") OffsetDateTime updatedAt) {
         this.id = id;
         this.userId = userId;
-        this.items = items == null ? Collections.emptyList() : items;
+        this.items = items == null ? new ArrayList<>() : new ArrayList<>(items);
         this.status = status == null ? Status.IN_CART : status;
         this.totalAmountCents = totalAmountCents;
         this.taxAmountCents = taxAmountCents;
@@ -60,6 +62,33 @@ public class Order {
     public void removeItem(CartItem item) {
         requireEditable();
         items.remove(item);
+    }
+
+    public boolean assignTicket(String eventId, String seatId, String ticketId, String ticketQr) {
+        for (int i = 0; i < items.size(); i++) {
+            CartItem current = items.get(i);
+            if (Objects.equals(current.eventId(), eventId) && Objects.equals(current.seatId(), seatId)) {
+                if (Objects.equals(current.ticketId(), ticketId) && Objects.equals(current.ticketQr(), ticketQr)) {
+                    return false;
+                }
+                CartItem updated = new CartItem(
+                        current.id(),
+                        current.eventId(),
+                        current.seatId(),
+                        current.unitPriceCents(),
+                        current.reservationId(),
+                        ticketId,
+                        ticketQr
+                );
+                items.set(i, updated);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public boolean hasAllTicketsIssued() {
+        return !items.isEmpty() && items.stream().allMatch(item -> item.ticketQr() != null);
     }
 
     public Long getId() {

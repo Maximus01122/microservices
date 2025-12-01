@@ -7,6 +7,7 @@ import com.ticketchief.orderservice.domain.CartItem;
 import com.ticketchief.orderservice.domain.Order;
 
 import java.io.ByteArrayOutputStream;
+import java.util.Base64;
 import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -60,11 +61,51 @@ public final class PdfInvoiceRenderer {
             totalP.setAlignment(Element.ALIGN_RIGHT);
             doc.add(totalP);
 
+            doc.add(new Paragraph(" "));
+            var qrHeader = new Paragraph("Ticket QR Codes", FontFactory.getFont(FontFactory.HELVETICA_BOLD, 14));
+            doc.add(qrHeader);
+
+            boolean hasQr = false;
+            for (CartItem item : order.getItems()) {
+                if (item.ticketQr() == null) {
+                    continue;
+                }
+                hasQr = true;
+                doc.add(new Paragraph("Event " + item.eventId() + " - Seat " + item.seatId()));
+                if (item.ticketId() != null) {
+                    doc.add(new Paragraph("Ticket ID: " + item.ticketId()));
+                }
+                byte[] qrBytes = decodeDataUrl(item.ticketQr());
+                if (qrBytes != null) {
+                    Image qrImage = Image.getInstance(qrBytes);
+                    qrImage.scaleToFit(150, 150);
+                    qrImage.setAlignment(Element.ALIGN_LEFT);
+                    doc.add(qrImage);
+                }
+                doc.add(new Paragraph(" "));
+            }
+
+            if (!hasQr) {
+                doc.add(new Paragraph("Tickets are being finalized. QR codes will appear once seats are confirmed."));
+            }
+
             doc.close();
             return baos.toByteArray();
         } catch (Exception e) {
             throw new IllegalStateException("Failed to render invoice PDF", e);
         }
+    }
+
+    private static byte[] decodeDataUrl(String dataUrl) {
+        if (dataUrl == null) {
+            return null;
+        }
+        int commaIdx = dataUrl.indexOf(',');
+        if (commaIdx == -1 || commaIdx + 1 >= dataUrl.length()) {
+            return null;
+        }
+        String base64Part = dataUrl.substring(commaIdx + 1);
+        return Base64.getDecoder().decode(base64Part);
     }
 }
 

@@ -27,6 +27,12 @@ public class RabbitMqConfig {
     private String processedQueueName;
     public static final String PAYMENT_PROCESSED_QUEUE = "payment.processed.queue";
 
+    @Value("${app.rabbit.ticket.created.queue:ticket.created.queue}")
+    private String ticketCreatedQueueName;
+
+    @Value("${app.rabbit.ticket.created.routing-key:ticket.created}")
+    private String ticketCreatedRoutingKey;
+
     @Bean
     public TopicExchange paymentsExchange() {
         return ExchangeBuilder.topicExchange(paymentsExchange).durable(true).build();
@@ -37,10 +43,20 @@ public class RabbitMqConfig {
         return QueueBuilder.durable(processedQueueName).build();
     }
 
+    @Bean
+    public Queue ticketCreatedQueue() {
+        return QueueBuilder.durable(ticketCreatedQueueName).build();
+    }
+
 
     @Bean
     public Binding bindProcessedQueue(Queue paymentsProcessedQueue, TopicExchange paymentsExchange) {
         return BindingBuilder.bind(paymentsProcessedQueue).to(paymentsExchange).with(paymentsProcessedRoutingKey);
+    }
+
+    @Bean
+    public Binding bindTicketCreatedQueue(Queue ticketCreatedQueue, TopicExchange paymentsExchange) {
+        return BindingBuilder.bind(ticketCreatedQueue).to(paymentsExchange).with(ticketCreatedRoutingKey);
     }
 
     @Bean

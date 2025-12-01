@@ -1,6 +1,7 @@
 package com.ticketchief.orderservice.adapter.output.persistence.entity;
 
 import com.ticketchief.orderservice.domain.CartItem;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
@@ -15,6 +16,9 @@ public class CartItemEntity {
     private String seatId;
     private long unitPriceCents;
     private String reservationId;
+    private String ticketId;
+    @Column(length = 4096)
+    private String ticketQr;
 
     public static CartItemEntity fromDomain(CartItem cartItem) {
         CartItemEntity e = new CartItemEntity();
@@ -23,6 +27,8 @@ public class CartItemEntity {
         e.setSeatId(cartItem.seatId());
         e.setUnitPriceCents(cartItem.unitPriceCents());
         e.setReservationId(cartItem.reservationId());
+        e.setTicketId(cartItem.ticketId());
+        e.setTicketQr(cartItem.ticketQr());
         return e;
     }
 
@@ -46,8 +52,16 @@ public class CartItemEntity {
         this.reservationId = reservationId;
     }
 
+    public void setTicketId(String ticketId) {
+        this.ticketId = ticketId;
+    }
+
+    public void setTicketQr(String ticketQr) {
+        this.ticketQr = ticketQr;
+    }
+
     public CartItem toDomain() {
-        return new CartItem(id, eventId, seatId, unitPriceCents, reservationId);
+        return new CartItem(id, eventId, seatId, unitPriceCents, reservationId, ticketId, ticketQr);
     }
 
 }

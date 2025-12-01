@@ -2,6 +2,7 @@ package com.ticketchief.orderservice.application;
 
 import com.ticketchief.common.events.PaymentProcessedEvent;
 import com.ticketchief.common.events.PaymentProcessedEvent.PaymentStatus;
+import com.ticketchief.common.events.TicketCreatedEvent;
 import com.ticketchief.orderservice.domain.CartItem;
 import com.ticketchief.orderservice.domain.Order;
 import com.ticketchief.orderservice.domain.Order.Status;
@@ -112,7 +113,6 @@ public class OrderService implements OrderServicePort, OrderPaymentServicePort {
     public void onPaymentProcessed(PaymentProcessedEvent event) {
         Order order = ordersJpaAdapter.findOrderById(event.orderId());
         if (event.status() == PaymentStatus.SUCCESS) {
-            InvoicePort.InvoiceResult result = invoiceAdapter.generateInvoice(order);
             order.markPaid();
 
             // Group items by eventId to publish validation per event
@@ -132,19 +132,38 @@ public class OrderService implements OrderServicePort, OrderPaymentServicePort {
                 );
             });
 
-            emailPublisher.publishEmailRequest(
-                    UUID.randomUUID().toString(),
-                    // In real app, get email from User Service or store it.
-                    // Using hardcoded for now as per previous state.
-                    "fuchsm1@mcmaster.ca", 
-                    "Your Invoice",
-                    "Thank you for your purchase.",
-                    result.url()
-            );
-
         } else {
             order.setStatus(Status.FAILED);
         }
         ordersJpaAdapter.save(order);
+    }
+
+    public void onTicketCreated(TicketCreatedEvent event) {
+        if (event.orderId() == null) {
+            return;
+        }
+        Long orderId;
+        try {
+            orderId = Long.valueOf(event.orderId());
+        } catch (NumberFormatException ex) {
+            return;
+        }
+        Order order = ordersJpaAdapter.findOrderById(orderId);
+        boolean updated = order.assignTicket(event.eventId(), event.seat(), event.ticketId(), event.qr());
+        if (!updated) {
+            return;
+        }
+        ordersJpaAdapter.save(order);
+
+        if (order.hasAllTicketsIssued()) {
+            InvoicePort.InvoiceResult result = invoiceAdapter.generateInvoice(order);
+            emailPublisher.publishEmailRequest(
+                    UUID.randomUUID().toString(),
+                    "fuchsm1@mcmaster.ca",
+                    "Your Invoice",
+                    "Thank you for your purchase. Your tickets are attached as QR codes.",
+                    result.url()
+            );
+        }
     }
 }

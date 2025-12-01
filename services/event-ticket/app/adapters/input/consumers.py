@@ -16,6 +16,7 @@ async def handle_payment_validated(payload: dict) -> None:
     seat_ids: List[str] = payload.get("seats", [])
     payer_user_id: Optional[str] = payload.get("userId")
     reservation_id: Optional[str] = payload.get("reservationId")
+    order_id: Optional[str] = payload.get("orderId")
     
     db = SessionLocal()
     try:
@@ -107,7 +108,9 @@ async def handle_payment_validated(payload: dict) -> None:
                 buf = BytesIO()
                 qr_img.save(buf, format="PNG")
                 data_url = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
-                
+
+                ticket.qr_code_url = data_url
+
                 await state.broker.publish(
                     "ticket.created",
                     {
@@ -115,6 +118,7 @@ async def handle_payment_validated(payload: dict) -> None:
                         "eventId": event_id,
                         "seat": seat_id,
                         "qr": data_url,
+                        "orderId": order_id,
                     },
                 )
             
