@@ -15,6 +15,7 @@ async def handle_payment_validated(payload: dict) -> None:
     event_id = payload.get("eventId")
     seat_ids: List[str] = payload.get("seats", [])
     payer_user_id: Optional[str] = payload.get("userId")
+    reservation_id: Optional[str] = payload.get("reservationId")
     
     db = SessionLocal()
     try:
@@ -27,20 +28,64 @@ async def handle_payment_validated(payload: dict) -> None:
         current_seats = dict(event.seats)
         holders = dict(event.reservation_holder or {})
         expires = dict(event.reservation_expires or {})
+        res_ids = dict(getattr(event, "reservation_ids", {}) or {})
         
         confirmed_seats: List[str] = []
+        from datetime import datetime
+
+        def _expiry_to_ts(val):
+            try:
+                return float(val)
+            except Exception:
+                try:
+                    if isinstance(val, str):
+                        v = val
+                        if v.endswith('Z'):
+                            v = v[:-1] + '+00:00'
+                        return datetime.fromisoformat(v).timestamp()
+                except Exception:
+                    return 0
+            return 0
+
         for seat_id in seat_ids:
             # Must be reserved and belong to the paying user
-            if current_seats.get(seat_id) == "reserved" and holders.get(seat_id) == payer_user_id:
-                current_seats[seat_id] = "confirmed"
-                confirmed_seats.append(seat_id)
-                # Clear holder and expiry for confirmed seat
-                expires.pop(seat_id, None)
-                holders.pop(seat_id, None)
+            if current_seats.get(seat_id) != "reserved":
+                continue
+
+            # If reservation_id provided, verify it matches
+            if reservation_id:
+                if res_ids.get(seat_id) != reservation_id:
+                    print(f"reservation id mismatch for seat {seat_id}")
+                    continue
+
+            # Verify not expired
+            exp_val = expires.get(seat_id)
+            if exp_val is not None:
+                exp_ts = _expiry_to_ts(exp_val)
+                import time
+                if exp_ts and exp_ts <= time.time():
+                    print(f"reservation expired for seat {seat_id}")
+                    continue
+
+            # Verify holder matches
+            if holders.get(seat_id) != payer_user_id:
+                print(f"reservation holder mismatch for seat {seat_id}")
+                continue
+
+            current_seats[seat_id] = "confirmed"
+            confirmed_seats.append(seat_id)
+            # Clear holder, expiry and reservation id for confirmed seat
+            expires.pop(seat_id, None)
+            holders.pop(seat_id, None)
+            res_ids.pop(seat_id, None)
         
         event.seats = current_seats
         event.reservation_expires = expires
         event.reservation_holder = holders
+        try:
+            event.reservation_ids = res_ids
+        except Exception:
+            pass
         db.commit()
 
         # Create one ticket per confirmed seat, each with its own QR

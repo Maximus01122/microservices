@@ -51,11 +51,18 @@ async def create_event(req: EventCreate, db: Session = Depends(get_db)) -> Event
     db.refresh(event)
     
     return EventView(
-        id=event.id,
+        id=str(event.id),
         name=event.name,
         rows=event.rows,
         cols=event.cols,
+        description=event.description,
+        venue=event.venue,
+        start_time=event.start_time,
+        creator_user_id=str(event.creator_user_id) if event.creator_user_id else None,
+        status=event.status or 'DRAFT',
         seats=event.seats,
+        created_at=event.created_at,
+        updated_at=event.updated_at,
     )
 
 
@@ -66,11 +73,18 @@ async def get_event(event_id: str, db: Session = Depends(get_db)) -> EventView:
     if not event:
         raise HTTPException(status_code=404, detail="event not found")
     return EventView(
-        id=event.id,
+        id=str(event.id),
         name=event.name,
         rows=event.rows,
         cols=event.cols,
+        description=event.description,
+        venue=event.venue,
+        start_time=event.start_time,
+        creator_user_id=str(event.creator_user_id) if event.creator_user_id else None,
+        status=event.status or 'DRAFT',
         seats=event.seats,
+        created_at=event.created_at,
+        updated_at=event.updated_at,
     )
 
 @router.patch("/events/{event_id}", response_model=EventView)
@@ -87,11 +101,18 @@ async def rename_event(event_id: str, req: EventRename, db: Session = Depends(ge
     db.refresh(event)
     
     return EventView(
-        id=event.id,
+        id=str(event.id),
         name=event.name,
         rows=event.rows,
         cols=event.cols,
+        description=event.description,
+        venue=event.venue,
+        start_time=event.start_time,
+        creator_user_id=str(event.creator_user_id) if event.creator_user_id else None,
+        status=event.status or 'DRAFT',
         seats=event.seats,
+        created_at=event.created_at,
+        updated_at=event.updated_at,
     )
 
 
@@ -126,20 +147,42 @@ async def reserve_seats(event_id: str, req: ReserveRequest, db: Session = Depend
     normalized_seats = [f"{r}{c}" for r, c in parsed]
 
     # Validate all seats exist and are available
-    current_seats = dict(event.seats) # Copy to mutable
+    from datetime import datetime, timezone, timedelta
+
+    current_seats = dict(event.seats)  # Copy to mutable
     expires = dict(event.reservation_expires or {})
     holders = dict(event.reservation_holder or {})
-    
+    res_ids = dict(getattr(event, "reservation_ids", {}) or {})
+
+    def _expiry_to_ts(val):
+        try:
+            return float(val)
+        except Exception:
+            try:
+                if isinstance(val, str):
+                    v = val
+                    if v.endswith('Z'):
+                        v = v[:-1] + '+00:00'
+                    return datetime.fromisoformat(v).timestamp()
+            except Exception:
+                return 0
+        return 0
+
     for seat_id in normalized_seats:
         if seat_id not in current_seats:
             raise HTTPException(status_code=400, detail=f"unknown seat {seat_id}")
-        
-        # Check expiry logic inline or via helper (simplified here)
-        exp = expires.get(seat_id)
-        if current_seats.get(seat_id) == "reserved" and exp and exp <= time.time():
-            current_seats[seat_id] = "available"
-            expires.pop(seat_id, None)
-            
+
+        # Check expiry logic: support old numeric epoch or new ISO strings
+        exp_val = expires.get(seat_id)
+        if current_seats.get(seat_id) == "reserved" and exp_val is not None:
+            exp_ts = _expiry_to_ts(exp_val)
+            import time
+            if exp_ts and exp_ts <= time.time():
+                current_seats[seat_id] = "available"
+                expires.pop(seat_id, None)
+                holders.pop(seat_id, None)
+                res_ids.pop(seat_id, None)
+
         # If seat is reserved by someone else, block
         if current_seats[seat_id] == "reserved":
             if holders.get(seat_id) != req.userId:
@@ -147,27 +190,39 @@ async def reserve_seats(event_id: str, req: ReserveRequest, db: Session = Depend
         elif current_seats[seat_id] != "available":
             raise HTTPException(status_code=409, detail=f"seat {seat_id} not available")
 
-    # Reserve
+    # Reserve with a reservation id and ISO expiry
+    reservation_id = str(uuid.uuid4())
+    expires_at_dt = datetime.utcnow() + timedelta(seconds=state.hold_seconds)
+    # ISO8601 UTC with Z
+    expires_at_iso = expires_at_dt.replace(microsecond=0).isoformat() + "Z"
+
     for seat_id in normalized_seats:
         current_seats[seat_id] = "reserved"
-        expires[seat_id] = time.time() + state.hold_seconds
+        expires[seat_id] = expires_at_iso
         holders[seat_id] = req.userId
+        res_ids[seat_id] = reservation_id
 
     # Update JSON columns
     event.seats = current_seats
     event.reservation_expires = expires
     event.reservation_holder = holders
-    
+    # attach reservation ids map (new column)
+    try:
+        event.reservation_ids = res_ids
+    except Exception:
+        # if model doesn't have attribute, ignore (compatibility)
+        pass
+
     db.commit()
 
-    # Publish domain event
+    # Publish domain event with reservation id
     assert state.broker is not None
     await state.broker.publish(
         "seat.reserved",
-        {"eventId": event_id, "seats": normalized_seats},
+        {"eventId": event_id, "seats": normalized_seats, "reservationId": reservation_id},
     )
 
-    return {"eventId": event_id, "reserved": normalized_seats}
+    return {"eventId": event_id, "reserved": normalized_seats, "reservationId": reservation_id, "expiresAt": expires_at_iso}
 
 
 @router.post("/tickets/verify", response_model=TicketVerifyResponse)

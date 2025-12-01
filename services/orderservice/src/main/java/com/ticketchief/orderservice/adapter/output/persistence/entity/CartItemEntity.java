@@ -14,6 +14,7 @@ public class CartItemEntity {
     private String eventId;
     private String seatId;
     private long unitPriceCents;
+    private String reservationId;
 
     public static CartItemEntity fromDomain(CartItem cartItem) {
         CartItemEntity e = new CartItemEntity();
@@ -21,6 +22,7 @@ public class CartItemEntity {
         e.setEventId(cartItem.eventId());
         e.setSeatId(cartItem.seatId());
         e.setUnitPriceCents(cartItem.unitPriceCents());
+        e.setReservationId(cartItem.reservationId());
         return e;
     }
 
@@ -40,8 +42,12 @@ public class CartItemEntity {
         this.unitPriceCents = unitPriceCents;
     }
 
+    public void setReservationId(String reservationId) {
+        this.reservationId = reservationId;
+    }
+
     public CartItem toDomain() {
-        return new CartItem(id, eventId, seatId, unitPriceCents);
+        return new CartItem(id, eventId, seatId, unitPriceCents, reservationId);
     }
 
 }

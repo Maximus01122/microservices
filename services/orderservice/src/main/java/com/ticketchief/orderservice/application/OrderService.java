@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.Objects;
 
 import static com.ticketchief.orderservice.domain.Order.Status.PAYMENT_PENDING;
 
@@ -120,11 +121,14 @@ public class OrderService implements OrderServicePort, OrderPaymentServicePort {
 
             itemsByEvent.forEach((eventId, items) -> {
                 List<String> seats = items.stream().map(CartItem::seatId).toList();
+                // derive reservationId from items if present
+                String reservationId = items.stream().map(CartItem::reservationId).filter(Objects::nonNull).findFirst().orElse(null);
                 paymentValidatedPublisher.publishPaymentValidated(
                         String.valueOf(order.getId()),
                         eventId,
                         seats,
-                        order.getUserId()
+                        order.getUserId(),
+                        reservationId
                 );
             });
 

@@ -23,6 +23,16 @@ async def lifespan(app: FastAPI):
     logger = logging.getLogger("event-ticket.migrations")
     # Execute each ALTER inside its own transaction so DDL is committed immediately and failures are visible
     alters = [
+        # Ensure uuid extension and id columns are UUID typed so SQLAlchemy UUID PK comparisons work
+        "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";",
+        # Convert existing id columns to UUID type if necessary
+        "ALTER TABLE IF EXISTS events ALTER COLUMN id TYPE UUID USING id::uuid;",
+        "ALTER TABLE IF EXISTS events ALTER COLUMN id SET DEFAULT uuid_generate_v4();",
+        "ALTER TABLE IF EXISTS tickets ALTER COLUMN id TYPE UUID USING id::uuid;",
+        "ALTER TABLE IF EXISTS tickets ALTER COLUMN id SET DEFAULT uuid_generate_v4();",
+        # Ensure foreign key columns are UUID as well
+        "ALTER TABLE IF EXISTS tickets ALTER COLUMN event_id TYPE UUID USING event_id::uuid;",
+        "ALTER TABLE IF EXISTS events ALTER COLUMN creator_user_id TYPE UUID USING creator_user_id::uuid;",
         "ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS description TEXT;",
         "ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS venue VARCHAR(1024);",
         "ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS start_time TIMESTAMP WITH TIME ZONE;",
@@ -30,6 +40,7 @@ async def lifespan(app: FastAPI):
         "ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS seats JSONB;",
         "ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS reservation_expires JSONB;",
         "ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS reservation_holder JSONB;",
+        "ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS reservation_ids JSONB;",
         "ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT now();",
         "ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT now();",
     ]
@@ -75,9 +86,27 @@ async def lifespan(app: FastAPI):
                         import time
                         now = time.time()
                         
+                        from datetime import datetime, timezone
+
+                        def _expiry_to_ts(val):
+                            # Accept numeric epoch (old format) or ISO8601 string (new format)
+                            try:
+                                return float(val)
+                            except Exception:
+                                try:
+                                    if isinstance(val, str):
+                                        v = val
+                                        if v.endswith('Z'):
+                                            v = v[:-1] + '+00:00'
+                                        return datetime.fromisoformat(v).timestamp()
+                                except Exception:
+                                    return 0
+                            return 0
+
                         for seat_id in list(expires.keys()):
-                            exp_time = expires[seat_id]
-                            if current_seats.get(seat_id) == "reserved" and exp_time <= now:
+                            exp_val = expires[seat_id]
+                            exp_ts = _expiry_to_ts(exp_val)
+                            if current_seats.get(seat_id) == "reserved" and exp_ts <= now:
                                 current_seats[seat_id] = "available"
                                 expires.pop(seat_id, None)
                                 changed = True

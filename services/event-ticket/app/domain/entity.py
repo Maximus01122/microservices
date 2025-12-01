@@ -18,6 +18,7 @@ class Event(Base):
     seats = Column(JSONB)  # seat map state (available, reserved, confirmed)
     reservation_expires = Column(JSONB, nullable=True)
     reservation_holder = Column(JSONB, nullable=True)
+    reservation_ids = Column(JSONB, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 

@@ -1,5 +1,7 @@
 package com.ticketchief.orderservice.domain;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.OffsetDateTime;
 import java.util.Collections;
 import java.util.List;
@@ -27,12 +29,13 @@ public class Order {
         this(id, userId, items, status, 0L, 0L, "CAD", null, null);
     }
 
-    public Order(Long id, String userId, List<CartItem> items, Status status,
-                 long totalAmountCents, long taxAmountCents, String currency,
-                 OffsetDateTime createdAt, OffsetDateTime updatedAt) {
+    @JsonCreator
+    public Order(@JsonProperty("id") Long id, @JsonProperty("userId") String userId, @JsonProperty("items") List<CartItem> items, @JsonProperty("status") Status status,
+                 @JsonProperty("totalAmountCents") long totalAmountCents, @JsonProperty("taxAmountCents") long taxAmountCents, @JsonProperty("currency") String currency,
+                 @JsonProperty("createdAt") OffsetDateTime createdAt, @JsonProperty("updatedAt") OffsetDateTime updatedAt) {
         this.id = id;
         this.userId = userId;
-        this.items = items;
+        this.items = items == null ? Collections.emptyList() : items;
         this.status = status == null ? Status.IN_CART : status;
         this.totalAmountCents = totalAmountCents;
         this.taxAmountCents = taxAmountCents;

@@ -6,6 +6,7 @@ public record PaymentValidatedEvent(
     String orderId,
     String eventId,
     List<String> seats,
-    String userId
+    String userId,
+    String reservationId
 ) {}
 

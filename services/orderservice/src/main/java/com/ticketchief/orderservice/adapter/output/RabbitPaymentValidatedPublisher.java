@@ -24,9 +24,9 @@ public class RabbitPaymentValidatedPublisher implements PublishPaymentValidatedP
     }
 
     @Override
-    public void publishPaymentValidated(String orderId, String eventId, List<String> seats, String userId) {
+    public void publishPaymentValidated(String orderId, String eventId, List<String> seats, String userId, String reservationId) {
         PaymentValidatedEvent event = new PaymentValidatedEvent(
-                orderId, eventId, seats, userId
+                orderId, eventId, seats, userId, reservationId
         );
         rabbitTemplate.convertAndSend(exchange, routingKey, event);
     }

@@ -1,12 +1,18 @@
 import uuid
 from fastapi import APIRouter, HTTPException, Depends
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from app.domain.model import UserCreate, UserView, LoginRequest
 from app.domain.entity import User
 from app.config.database import get_db
 from app import state
+from passlib.context import CryptContext
 
 router = APIRouter()
+
+# Password hashing context (bcrypt)
+# Use PBKDF2-SHA256 for password hashing to avoid bcrypt binary dependency issues
+pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
 @router.get("/health")
 async def health() -> dict:
@@ -21,7 +27,12 @@ async def register_user(req: UserCreate, db: Session = Depends(get_db)) -> UserV
 
     user_id = str(uuid.uuid4())
     verification_token = str(uuid.uuid4())
-    user = User(id=user_id, email=req.email, name=req.name, verification_token=verification_token)
+    # Hash password if provided
+    password_hash = None
+    if req.password:
+        password_hash = pwd_context.hash(req.password)
+
+    user = User(id=user_id, email=req.email, name=req.name, password_hash=password_hash, verification_token=verification_token)
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -61,5 +72,30 @@ async def login(req: LoginRequest, db: Session = Depends(get_db)) -> dict:
     found = db.query(User).filter(User.email == req.email).first()
     if not found:
         raise HTTPException(status_code=401, detail="invalid credentials")
+
+    # Prevent login if user hasn't verified their email
+    if not found.is_verified:
+        raise HTTPException(status_code=403, detail="email not verified")
+
+    # Validate password against stored hash
+    if not found.password_hash or not pwd_context.verify(req.password, found.password_hash):
+        raise HTTPException(status_code=401, detail="invalid credentials")
+
     token = f"dummy-{found.id}"
     return {"token": token, "userId": str(found.id)}
+
+
+@router.get("/verify")
+async def verify_user(token: str, db: Session = Depends(get_db)) -> RedirectResponse:
+    """Verify a user by token. If successful, mark user as verified and redirect to the frontend homepage."""
+    user = db.query(User).filter(User.verification_token == token).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="invalid or expired token")
+
+    user.is_verified = True
+    user.verification_token = None
+    db.add(user)
+    db.commit()
+
+    # Redirect the user to the frontend (homepage). The frontend runs on port 3000 in compose.
+    return RedirectResponse(url="http://localhost:3000/?verified=true")

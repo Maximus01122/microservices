@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.nio.file.Files;
@@ -18,6 +19,8 @@ public class EmailService {
     private static final Logger log = LoggerFactory.getLogger(EmailService.class);
     private final SendEmailPort sendEmailPort;
     private final InvoiceFetcherPort invoiceFetcherPort;
+    @Value("${app.user.base-url:http://localhost:3002}")
+    private String userBaseUrl;
 
     public EmailService(SendEmailPort sendEmailPort, InvoiceFetcherPort invoiceFetcherPort) {
         this.sendEmailPort = sendEmailPort;
@@ -41,7 +44,7 @@ public class EmailService {
     public void sendVerification(String to, String token) {
         try {
             String subject = "Please verify your TicketChief account";
-            String verificationLink = String.format("%s/verify?token=%s", "https://example.com/verify", token);
+            String verificationLink = String.format("%s/verify?token=%s", userBaseUrl, token);
             String body = "Welcome to TicketChief!\n\nPlease verify your email by clicking the link below:\n" + verificationLink;
             sendEmailPort.send(to, subject, body, null, null);
             log.info("Verification email sent to {}", to);
