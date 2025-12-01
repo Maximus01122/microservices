@@ -22,6 +22,7 @@ interface CartItem {
   eventId: string;
   seatId: string;
   unitPriceCents: number;
+  reservationId?: string;
 }
 
 const API_BASE = ''; // Relative path handled by proxy
@@ -54,6 +55,9 @@ const App: React.FC = () => {
   const [currentOrderId, setCurrentOrderId] = useState<number | null>(null);
   const [orderTotal, setOrderTotal] = useState<number>(0);
   const [showRules, setShowRules] = useState(false);
+  const [showOrderModal, setShowOrderModal] = useState(false);
+  const [modalOrderId, setModalOrderId] = useState<number | null>(null);
+  const [modalReservationId, setModalReservationId] = useState<string | null>(null);
 
   // Show verification success/failure based on URL query param (?verified=true)
   useEffect(() => {
@@ -217,26 +221,37 @@ const App: React.FC = () => {
         if (cols[i] !== cols[i - 1] + 1) throw new Error('Seats must be contiguous');
       }
 
-      // 1. Reserve at Event Service
-      await axios.post(`${API_BASE}/api/events/${currentEvent.id}/reserve`, {
+      console.log('reserveSeats: starting reserve call', { eventId: currentEvent.id, seats: normalizedSeats, userId: user.id });
+      // 1. Reserve at Event Service and capture reservationId
+      const reserveRes = await axios.post(`${API_BASE}/api/events/${currentEvent.id}/reserve`, {
         userId: user.id,
         seats: normalizedSeats
       });
+      console.log('reserveSeats: reserve response', reserveRes.data);
+      const reservationId = reserveRes.data?.reservationId;
 
-      // 2. Create Order
+      // 2. Create Order (attach reservationId to each cart item so it can be validated later)
       const items: CartItem[] = selectedSeats.map(seatId => ({
         eventId: currentEvent.id,
         seatId: seatId,
-        unitPriceCents: 1000
+        unitPriceCents: 1000,
+        reservationId: reservationId
       }));
 
+      console.log('reserveSeats: creating order with items', items);
       const orderRes = await axios.post(`${API_BASE}/api/orders`, {
         userId: user.id,
         status: 'IN_CART',
         items: items
       });
+      console.log('reserveSeats: order response', orderRes.data);
 
       setCurrentOrderId(orderRes.data.id);
+      // show quick modal with order + reservation info
+      setModalOrderId(orderRes.data.id ?? null);
+      setModalReservationId(reservationId ?? null);
+      setShowOrderModal(true);
+      console.log('Order created:', orderRes.data);
       setOrderTotal(items.length * 10); // $10 each
       
       // Refresh map to show reserved
@@ -375,6 +390,22 @@ const App: React.FC = () => {
           </Modal.Body>
           <Modal.Footer>
             <Button variant="secondary" onClick={() => setShowRules(false)}>Close</Button>
+          </Modal.Footer>
+        </Modal>
+
+        {/* Order created modal to show order id and reservation id */}
+        <Modal show={showOrderModal} onHide={() => setShowOrderModal(false)}>
+          <Modal.Header closeButton>
+            <Modal.Title>Order Created</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <p>Your order has been created.</p>
+            {modalOrderId !== null && <p><strong>Order ID:</strong> {modalOrderId}</p>}
+            {modalReservationId && <p><strong>Reservation ID:</strong> {modalReservationId}</p>}
+            <p>Go to the Checkout card to finalize payment.</p>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowOrderModal(false)}>Close</Button>
           </Modal.Footer>
         </Modal>
 

@@ -38,11 +38,7 @@
             <artifactId>spring-boot-starter-mail</artifactId>
         </dependency>
 
-        <dependency>
-            <groupId>com.h2database</groupId>
-            <artifactId>h2</artifactId>
-            <scope>runtime</scope>
-        </dependency>
+        <!-- H2 removed: using PostgreSQL in Docker Compose -->
 
         <!-- PostgreSQL JDBC driver for runtime when using Postgres in Docker -->
         <dependency>
