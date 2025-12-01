@@ -16,6 +16,8 @@ interface Event {
   rows: number;
   cols: number;
   seats: Record<string, string>; // seatId -> status
+  description?: string | null;
+  venue?: string | null;
 }
 
 interface CartItem {
@@ -51,6 +53,8 @@ const App: React.FC = () => {
 
   // App Data
   const [currentEvent, setCurrentEvent] = useState<Event | null>(null);
+  const [eventsList, setEventsList] = useState<Event[]>([]);
+  const [eventsLoading, setEventsLoading] = useState<boolean>(false);
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
   const [currentOrderId, setCurrentOrderId] = useState<number | null>(null);
   const [orderTotal, setOrderTotal] = useState<number>(0);
@@ -125,6 +129,30 @@ const App: React.FC = () => {
   };
 
   // Event Handlers
+  const fetchEventsList = async () => {
+    if (!user) {
+      setEventsList([]);
+      return;
+    }
+    setEventsLoading(true);
+    try {
+      const res = await axios.get(`${API_BASE}/api/events`);
+      setEventsList(res.data || []);
+    } catch (err: any) {
+      setError('Failed to load events');
+    } finally {
+      setEventsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      fetchEventsList();
+    } else {
+      setEventsList([]);
+    }
+  }, [user]);
+
   const createEvent = async () => {
     if (!user) return;
     setError(null); setSuccess(null);
@@ -138,6 +166,7 @@ const App: React.FC = () => {
       setSuccess(`Event Created! ID: ${res.data.id}`);
       setLoadEvtId(res.data.id);
       loadEvent(res.data.id);
+      fetchEventsList();
     } catch (err: any) {
       setError('Failed to create event');
     }
@@ -470,6 +499,39 @@ const App: React.FC = () => {
                     <Form.Control type="text" placeholder="Event ID" value={loadEvtId} onChange={e => setLoadEvtId(e.target.value)} className="me-2" />
                     <Button onClick={() => loadEvent(loadEvtId)}>Load</Button>
                   </div>
+                </Card.Body>
+              </Card>
+
+              <Card className="mb-4 shadow-sm">
+                <Card.Header className="d-flex justify-content-between align-items-center">
+                  <span>All Events</span>
+                  <Button variant="outline-secondary" size="sm" onClick={fetchEventsList} disabled={eventsLoading}>
+                    {eventsLoading ? 'Refreshing...' : 'Refresh'}
+                  </Button>
+                </Card.Header>
+                <Card.Body style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                  {eventsLoading ? (
+                    <div className="text-muted">Loading events...</div>
+                  ) : eventsList.length === 0 ? (
+                    <div className="text-muted">No events available yet.</div>
+                  ) : (
+                    eventsList.map(evt => (
+                      <div key={evt.id} className="d-flex justify-content-between align-items-start mb-3 border-bottom pb-2">
+                        <div className="me-2">
+                          <strong>{evt.name || 'Untitled Event'}</strong>
+                          <div className="text-muted small">
+                            {evt.rows} rows × {evt.cols} cols
+                          </div>
+                          <div className="text-muted small">
+                            {evt.id}
+                          </div>
+                        </div>
+                        <Button size="sm" variant="primary" onClick={() => { setLoadEvtId(evt.id); loadEvent(evt.id); }}>
+                          View
+                        </Button>
+                      </div>
+                    ))
+                  )}
                 </Card.Body>
               </Card>
 

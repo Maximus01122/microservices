@@ -24,6 +24,30 @@ async def health() -> dict:
     return {"status": "ok"}
 
 
+@router.get("/events", response_model=List[EventView])
+async def list_events(db: Session = Depends(get_db)) -> List[EventView]:
+    records = db.query(EventEntity).order_by(EventEntity.created_at.desc()).all()
+    result: List[EventView] = []
+    for event in records:
+        result.append(
+            EventView(
+                id=str(event.id),
+                name=event.name,
+                rows=event.rows,
+                cols=event.cols,
+                description=event.description,
+                venue=event.venue,
+                start_time=event.start_time,
+                creator_user_id=str(event.creator_user_id) if event.creator_user_id else None,
+                status=event.status or 'DRAFT',
+                seats=event.seats,
+                created_at=event.created_at,
+                updated_at=event.updated_at,
+            )
+        )
+    return result
+
+
 @router.post("/events", response_model=EventView, status_code=201)
 async def create_event(req: EventCreate, db: Session = Depends(get_db)) -> EventView:
     event_id = str(uuid.uuid4())
