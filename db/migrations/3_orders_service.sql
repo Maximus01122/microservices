@@ -24,7 +24,10 @@ CREATE TABLE IF NOT EXISTS order_items (
   order_id BIGINT REFERENCES orders(id) ON DELETE CASCADE,
   event_id UUID REFERENCES events(id) ON DELETE SET NULL,
   seat_id VARCHAR(50),
-  unit_price_cents BIGINT NOT NULL
+  unit_price_cents BIGINT NOT NULL,
+  ticket_id UUID,
+  ticket_qr TEXT,
+  reservation_id UUID
 );
 
 CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
