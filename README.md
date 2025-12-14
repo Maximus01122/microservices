@@ -43,6 +43,41 @@ The project consists of the following microservices:
     *   User: [http://localhost:3002/docs](http://localhost:3002/docs)
     *   Event: [http://localhost:3001/docs](http://localhost:3001/docs)
 
+## Running Tests
+
+### Python Services (User, Event-Ticket)
+
+```bash
+# User Service
+cd services/user
+pip install -r requirements.txt
+pytest -v
+
+# Event-Ticket Service
+cd services/event-ticket
+pip install -r requirements.txt
+pytest -v
+```
+
+### Java Services (Order, Payment)
+
+```bash
+# First, install parent POM and common module
+cd services/orderservice
+./mvnw.cmd install -f ../../pom.xml -DskipTests -N
+./mvnw.cmd install -f ../common/pom.xml -DskipTests
+
+# Order Service unit tests
+cd services/orderservice
+./mvnw.cmd test -Dtest=OrderTest
+
+# Payment Service unit tests
+cd services/payment
+./mvnw.cmd test -Dtest=PaymentServiceTest
+```
+
+**Note:** Integration tests require RabbitMQ to be running.
+
 ## Usage Scenario
 
 See [SCENARIO.md](SCENARIO.md) for a detailed walkthrough of the end-to-end flow.
