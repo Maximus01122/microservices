@@ -32,8 +32,8 @@ public class OrderController {
         return orderService.findOrder(orderId);
     }
 
-    @PostMapping("/finalize/{orderId}")
-    public java.util.Map<String, String> finalizeOrder(@PathVariable Long orderId) {
+    @PostMapping("/{orderId}/payments")
+    public java.util.Map<String, String> initiatePayment(@PathVariable Long orderId) {
         String correlationId = orderService.finalizeOrder(orderId);
         return java.util.Collections.singletonMap("correlationId", correlationId);
     }

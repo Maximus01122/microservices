@@ -33,7 +33,7 @@ GET {{userBase}}/users/{{registerUser.response.body.$.id}}
 
 ###
 # 3) Login (mock)
-POST {{userBase}}/login
+POST {{userBase}}/sessions
 Content-Type: application/json
 
 {

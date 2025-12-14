@@ -38,9 +38,9 @@ Environment variables already point services at the `ticketchief` RabbitMQ excha
    curl -I http://localhost:3000/api/email-verifications/<TOKEN>
    ```
    - FastAPI marks `is_verified=true` and redirects to the frontend.
-4. Login (optional REST call used by the frontend to fetch a session token):
+4. Create session / Login (optional REST call used by the frontend to fetch a session token):
    ```bash
-   curl -X POST http://localhost:3000/api/login \
+   curl -X POST http://localhost:3000/api/sessions \
      -H "Content-Type: application/json" \
      -d '{"email":"demo+user@example.com","password":"Secret123!"}'
    ```
@@ -106,9 +106,9 @@ Environment variables already point services at the `ticketchief` RabbitMQ excha
 
 **Supported behavior:** collect card data, run the payment simulator, issue tickets with QR codes, and deliver an invoice email.
 
-1. Finalize order (Order Service):
+1. Initiate payment for order (Order Service):
    ```bash
-   curl -X POST http://localhost:3000/api/orders/finalize/<ORDER_ID>
+   curl -X POST http://localhost:3000/api/orders/<ORDER_ID>/payments
    ```
    - Order Service emits `payment.requested` (routing key `payment.requested`).
 2. Payment Service handles the request:
@@ -128,9 +128,9 @@ Environment variables already point services at the `ticketchief` RabbitMQ excha
 **Supported behavior:** decline the payment, cancel the order, and release held seats when the buyer uses the known-bad card number.
 
 1. Run the standard reservation + cart steps (Scenario 3).
-2. Finalize the order but send a failing card to the Payment Service:
+2. Submit failing card to the Payment Service:
    ```bash
-   curl -X POST http://localhost:3000/api/payment-sessions/<CORRELATION_ID>/attempt \
+   curl -X POST http://localhost:3000/api/payment-sessions/<CORRELATION_ID>/card-submissions \
      -H "Content-Type: application/json" \
      -d '{"cardNumber":"666","cardHolder":"Fraudulent User","cardCvv":"123"}'
    ```

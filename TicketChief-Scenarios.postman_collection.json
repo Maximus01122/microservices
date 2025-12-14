@@ -49,7 +49,7 @@
 					"response": []
 				},
 				{
-					"name": "Login User",
+					"name": "Create Session (Login)",
 					"request": {
 						"method": "POST",
 						"header": [
@@ -62,15 +62,15 @@
 							"mode": "raw",
 							"raw": "{\n  \"email\": \"{{userEmail}}\",\n  \"password\": \"{{userPassword}}\"\n}"
 						},
-						"url": {
-							"raw": "{{baseUrl}}/login",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"login"
-							]
-						}
+					"url": {
+						"raw": "{{baseUrl}}/sessions",
+						"host": [
+							"{{baseUrl}}"
+						],
+						"path": [
+							"sessions"
+						]
+					}
 					},
 					"response": []
 				}
@@ -221,7 +221,7 @@
 			"name": "Scenario 4 - Successful Purchase",
 			"item": [
 				{
-					"name": "Finalize Order",
+					"name": "Initiate Payment",
 					"event": [
 						{
 							"listen": "test",
@@ -238,21 +238,21 @@
 						"method": "POST",
 						"header": [],
 						"url": {
-							"raw": "{{baseUrl}}/orders/finalize/{{orderId}}",
+							"raw": "{{baseUrl}}/orders/{{orderId}}/payments",
 							"host": [
 								"{{baseUrl}}"
 							],
 							"path": [
 								"orders",
-								"finalize",
-								"{{orderId}}"
+								"{{orderId}}",
+								"payments"
 							]
 						}
 					},
 					"response": []
 				},
 				{
-					"name": "Payment Attempt (Success)",
+					"name": "Submit Card (Success)",
 					"request": {
 						"method": "POST",
 						"header": [
@@ -266,14 +266,14 @@
 							"raw": "{\n  \"cardNumber\": \"4242424242424242\",\n  \"cardHolder\": \"Demo User\",\n  \"cardCvv\": \"123\"\n}"
 						},
 						"url": {
-							"raw": "{{baseUrl}}/payment-sessions/{{correlationId}}/attempt",
+							"raw": "{{baseUrl}}/payment-sessions/{{correlationId}}/card-submissions",
 							"host": [
 								"{{baseUrl}}"
 							],
 							"path": [
 								"payment-sessions",
 								"{{correlationId}}",
-								"attempt"
+								"card-submissions"
 							]
 						}
 					},
@@ -285,7 +285,7 @@
 			"name": "Scenario 5 - Payment Failure",
 			"item": [
 				{
-					"name": "Payment Attempt (Failure 666)",
+					"name": "Submit Card (Failure 666)",
 					"request": {
 						"method": "POST",
 						"header": [
@@ -299,14 +299,14 @@
 							"raw": "{\n  \"cardNumber\": \"666\",\n  \"cardHolder\": \"Fraud Test\",\n  \"cardCvv\": \"123\"\n}"
 						},
 						"url": {
-							"raw": "{{baseUrl}}/payment-sessions/{{correlationId}}/attempt",
+							"raw": "{{baseUrl}}/payment-sessions/{{correlationId}}/card-submissions",
 							"host": [
 								"{{baseUrl}}"
 							],
 							"path": [
 								"payment-sessions",
 								"{{correlationId}}",
-								"attempt"
+								"card-submissions"
 							]
 						}
 					},

@@ -124,7 +124,7 @@ const App: React.FC = () => {
     e.preventDefault();
     setError(null);
     try {
-      const res = await axios.post(`${API_BASE}/api/login`, { email: loginEmail, password: loginPassword });
+      const res = await axios.post(`${API_BASE}/api/sessions`, { email: loginEmail, password: loginPassword });
       setToken(res.data.token);
       // Fetch full user details? Assuming ID is returned or token is enough. 
       // Mock login returns { token, userId }
@@ -367,7 +367,7 @@ const App: React.FC = () => {
     setError(null); setSuccess(null);
     try {
       // 1) Ask orderservice to create a payment session and return a correlationId
-      const res = await axios.post(`${API_BASE}/api/orders/finalize/${currentOrderId}`);
+      const res = await axios.post(`${API_BASE}/api/orders/${currentOrderId}/payments`);
       const correlationId = res.data?.correlationId || res.data?.correlation_id;
       if (!correlationId) {
         setError('Failed to start payment session');
@@ -400,7 +400,7 @@ const App: React.FC = () => {
       }
 
       // 3) Submit a single card attempt to payment service using the correlationId
-      const attemptRes = await axios.post(`${API_BASE}/api/payment-sessions/${correlationId}/attempt`, {
+      const attemptRes = await axios.post(`${API_BASE}/api/payment-sessions/${correlationId}/card-submissions`, {
         cardNumber,
         cardCvv,
         cardHolder

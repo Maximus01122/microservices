@@ -65,9 +65,9 @@ async def delete_user(user_id: str, db: Session = Depends(get_db)) -> None:
         return
     raise HTTPException(status_code=404, detail="user not found")
 
-@router.post("/login")
-# Mock login: find by email and return a dummy token
-async def login(req: LoginRequest, db: Session = Depends(get_db)) -> dict:
+@router.post("/sessions")
+# Create a session (login): find by email and return a token
+async def create_session(req: LoginRequest, db: Session = Depends(get_db)) -> dict:
     # Mock login: find by email and return a dummy token
     found = db.query(User).filter(User.email == req.email).first()
     if not found:

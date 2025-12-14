@@ -13,12 +13,12 @@ module.exports = function(app) {
     })
   );
   app.use(
-    '/api/login',
+    '/api/sessions',
     createProxyMiddleware({
       target: process.env.USER_SERVICE_URL || 'http://localhost:3002',
       changeOrigin: true,
       pathRewrite: {
-        '^/api/login': '/login',
+        '^/api/sessions': '/sessions',
       },
     })
   );

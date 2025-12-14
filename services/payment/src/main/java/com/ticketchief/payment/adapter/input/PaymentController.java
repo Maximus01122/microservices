@@ -31,8 +31,8 @@ public class PaymentController {
         public String cardHolder;
     }
 
-    @PostMapping("/{correlationId}/attempt")
-    public ResponseEntity<?> attempt(@PathVariable String correlationId, @RequestBody AttemptRequest body) {
+    @PostMapping("/{correlationId}/card-submissions")
+    public ResponseEntity<?> submitCard(@PathVariable String correlationId, @RequestBody AttemptRequest body) {
         PaymentSession session = sessionRepo.findByCorrelationId(correlationId);
         if (session == null) return ResponseEntity.notFound().build();
 
