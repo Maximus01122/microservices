@@ -66,8 +66,14 @@ async def lifespan(app: FastAPI):
     except Exception:
         state.hold_seconds = 600
 
-    # Start consumer in background
+    # Start consumer(s) in background
     asyncio.create_task(state.broker.consume_payment_validated(handle_payment_validated))
+    # Listen for reservation release requests from orderservice
+    try:
+        from app.adapters.input.consumers import handle_reservation_release
+        asyncio.create_task(state.broker.consume_reservation_release(handle_reservation_release))
+    except Exception:
+        pass
 
     # Start background sweeper to release expired reservations
     async def sweeper():

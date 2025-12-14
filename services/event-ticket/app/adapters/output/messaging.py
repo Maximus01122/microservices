@@ -62,3 +62,25 @@ class Broker:
         # Prevent method exit to keep consumer alive
         self._consumer_task = asyncio.create_task(asyncio.Event().wait())
 
+    # Bind and consume reservation.release command with the provided handler.
+    async def consume_reservation_release(self, handler) -> None:
+        assert self._channel is not None
+        assert self._exchange is not None
+        queue = await self._channel.declare_queue("event-ticket.release", durable=True)
+        await queue.bind(self._exchange, routing_key="reservation.release")
+
+        async def _on_message(message: aio_pika.abc.AbstractIncomingMessage) -> None:
+            async with message.process():
+                try:
+                    payload = orjson.loads(message.body)
+                    await handler(payload)
+                except Exception as exc:
+                    print(f"[event-ticket] reservation release handler error: {exc}")
+                    raise
+
+        await queue.consume(_on_message, no_ack=False)
+
+        # Keep consumer alive (reuses same task slot if already set)
+        if self._consumer_task is None or self._consumer_task.done():
+            self._consumer_task = asyncio.create_task(asyncio.Event().wait())
+

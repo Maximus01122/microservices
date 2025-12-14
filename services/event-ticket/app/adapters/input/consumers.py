@@ -138,3 +138,59 @@ async def handle_payment_validated(payload: dict) -> None:
         db.rollback()
     finally:
         db.close()
+
+
+async def handle_reservation_release(payload: dict) -> None:
+    """Handle reservation release requests published by orderservice.
+    Expected payload: { "reservationId": "<id>", "orderId": "<id>" }
+    This will scan events and free seats belonging to the reservation id.
+    """
+    reservation_id = payload.get("reservationId") or payload.get("reservation_id")
+    if not reservation_id:
+        print("reservation release payload missing reservationId")
+        return
+
+    db = SessionLocal()
+    try:
+        events = db.query(EventEntity).all()
+        released = []
+        for event in events:
+            current_seats = dict(event.seats)
+            expires = dict(event.reservation_expires or {})
+            holders = dict(event.reservation_holder or {})
+            res_ids = dict(getattr(event, "reservation_ids", {}) or {})
+            changed = False
+            for seat_id, rid in list(res_ids.items()):
+                if rid == reservation_id:
+                    if current_seats.get(seat_id) == 'reserved':
+                        current_seats[seat_id] = 'available'
+                        expires.pop(seat_id, None)
+                        holders.pop(seat_id, None)
+                        res_ids.pop(seat_id, None)
+                        changed = True
+                        released.append({"eventId": str(event.id), "seat": seat_id})
+            if changed:
+                event.seats = current_seats
+                event.reservation_expires = expires
+                event.reservation_holder = holders
+                try:
+                    event.reservation_ids = res_ids
+                except Exception:
+                    pass
+                db.commit()
+                # Broadcast release for this event
+                try:
+                    seats_for_event = [r["seat"] for r in released if r.get("eventId") == str(event.id)]
+                    if seats_for_event:
+                        await state.broker.publish("seat.released", {"eventId": str(event.id), "seats": seats_for_event})
+                        try:
+                            await state.broadcast_event(str(event.id), {"type": "released", "seats": seats_for_event})
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+    except Exception as e:
+        print(f"Error handling reservation release: {e}")
+        db.rollback()
+    finally:
+        db.close()

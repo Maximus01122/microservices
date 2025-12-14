@@ -12,6 +12,7 @@ import com.ticketchief.orderservice.port.output.OrdersRepositoryPort;
 import com.ticketchief.orderservice.port.output.PublishEmailRequestedPort;
 import com.ticketchief.orderservice.port.output.PublishPaymentRequestedPort;
 import com.ticketchief.orderservice.port.output.PublishPaymentValidatedPort;
+import com.ticketchief.orderservice.port.output.PublishReservationReleasePort;
 import com.ticketchief.orderservice.port.output.InvoicePort;
 
 import jakarta.transaction.Transactional;
@@ -43,6 +44,7 @@ public class OrderService implements OrderServicePort, OrderPaymentServicePort {
     private final PublishPaymentValidatedPort paymentValidatedPublisher;
     private final InvoicePort invoiceAdapter;
     private final com.ticketchief.orderservice.port.output.TicketReservationPort ticketReservationPort;
+    private final PublishReservationReleasePort reservationReleasePublisher;
 
     @Value("${app.invoice.storage-dir}")
     private String storageDir;
@@ -53,7 +55,8 @@ public class OrderService implements OrderServicePort, OrderPaymentServicePort {
                         com.ticketchief.orderservice.port.output.UserClientPort userClient,
                         PublishPaymentValidatedPort paymentValidatedPublisher,
                         InvoicePort invoiceAdapter,
-                        com.ticketchief.orderservice.port.output.TicketReservationPort ticketReservationPort) {
+                        com.ticketchief.orderservice.port.output.TicketReservationPort ticketReservationPort,
+                        PublishReservationReleasePort reservationReleasePublisher) {
         this.ordersJpaAdapter = ordersJpaAdapter;
         this.paymentPublisher = paymentPublisher;
         this.emailPublisher = emailPublisher;
@@ -61,6 +64,7 @@ public class OrderService implements OrderServicePort, OrderPaymentServicePort {
         this.paymentValidatedPublisher = paymentValidatedPublisher;
         this.invoiceAdapter = invoiceAdapter;
         this.ticketReservationPort = ticketReservationPort;
+        this.reservationReleasePublisher = reservationReleasePublisher;
     }
 
     @Override
@@ -151,15 +155,19 @@ public class OrderService implements OrderServicePort, OrderPaymentServicePort {
             });
 
         } else {
-            // Payment failed (final): log, release reservation and delete order
+            // Payment failed (final): log, publish reservation-release request and delete order
             log.warn("Received PAYMENT FAILED for orderId={} (reason={}), correlationId={}", event.orderId(), event.reason(), event.correlationId());
-            String reservationId = order.getItems().stream().map(CartItem::reservationId).filter(Objects::nonNull).findFirst().orElse(null);
-            try {
-                if (reservationId != null) {
-                    ticketReservationPort.releaseReservation(reservationId);
+            // collect distinct reservation ids from order items and request release for each
+            java.util.Set<String> reservationIds = order.getItems().stream()
+                    .map(CartItem::reservationId)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
+            for (String rid : reservationIds) {
+                try {
+                    reservationReleasePublisher.publishReservationRelease(rid, String.valueOf(order.getId()));
+                } catch (Exception ex) {
+                    log.warn("Failed to publish reservation release for reservationId={}: {}", rid, ex.getMessage());
                 }
-            } catch (Exception ex) {
-                // log and continue
             }
             ordersJpaAdapter.deleteById(order.getId());
             return;

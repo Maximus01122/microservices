@@ -296,46 +296,9 @@ async def create_reservation(event_id: str, req: ReserveRequest, db: Session = D
     return {"eventId": event_id, "reserved": normalized_seats, "reservationId": reservation_id, "expiresAt": expires_at_iso}
 
 
-@router.delete("/reservations/{reservation_id}", status_code=200)
-async def delete_reservation(reservation_id: str, db: Session = Depends(get_db)) -> dict:
-    # Find all events and free seats with this reservation_id
-    events = db.query(EventEntity).all()
-    released = []
-    for event in events:
-        current_seats = dict(event.seats)
-        expires = dict(event.reservation_expires or {})
-        holders = dict(event.reservation_holder or {})
-        res_ids = dict(getattr(event, "reservation_ids", {}) or {})
-        changed = False
-        for seat_id, rid in list(res_ids.items()):
-            if rid == reservation_id:
-                # only release if currently reserved
-                if current_seats.get(seat_id) == 'reserved':
-                    current_seats[seat_id] = 'available'
-                    expires.pop(seat_id, None)
-                    holders.pop(seat_id, None)
-                    res_ids.pop(seat_id, None)
-                    changed = True
-                    released.append({"eventId": str(event.id), "seat": seat_id})
-        if changed:
-            event.seats = current_seats
-            event.reservation_expires = expires
-            event.reservation_holder = holders
-            try:
-                event.reservation_ids = res_ids
-            except Exception:
-                pass
-            db.commit()
-            # Broadcast release for this event
-            try:
-                # collect seats released for this event
-                seats_for_event = [r["seat"] for r in released if r.get("eventId") == str(event.id)]
-                if seats_for_event:
-                    await state.broadcast_event(str(event.id), {"type": "released", "seats": seats_for_event})
-            except Exception:
-                pass
-
-    return {"reservationId": reservation_id, "released": released}
+# Reservation release is now handled via AMQP `reservation.release` events
+# The HTTP DELETE `/reservations/{reservation_id}` endpoint was removed in favor
+# of the event-driven consumer implemented in `app.adapters.input.consumers.handle_reservation_release`.
 
 
 @router.get("/events/{event_id}/updates")
