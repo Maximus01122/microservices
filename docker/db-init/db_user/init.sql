@@ -1,7 +1,4 @@
--- 1_users_service.sql
--- Creates the `users` table for the User Service
--- Adds uuid extension and a reusable trigger to update `updated_at` timestamps
-
+-- Init for db_user (users service)
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Reusable function to keep updated_at current
@@ -30,5 +27,4 @@ CREATE TRIGGER users_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at();
 
--- Helpful indexes
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);

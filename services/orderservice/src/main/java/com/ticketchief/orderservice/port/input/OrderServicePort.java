@@ -11,8 +11,6 @@ public interface OrderServicePort {
         Order placeOrder(Order order);
         void cancelOrder(Long orderId);
         String finalizeOrder(Long orderId);
-        Order addItem(Long orderId, CartItem item);
-        Order removeItem(Long orderId, CartItem item);
         Order findOrder(Long orderId);
 
         ResponseEntity<byte[]> getInvoice(Long orderId) throws IOException;

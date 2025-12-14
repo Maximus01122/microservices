@@ -42,14 +42,4 @@ public class OrderController {
     public ResponseEntity<byte[]> getInvoice(@PathVariable Long orderId) throws IOException {
         return orderService.getInvoice(orderId);
     }
-
-    @DeleteMapping("/remove/{orderId}")
-    public Order removeItem(@PathVariable Long orderId, @RequestBody CartItem cartItem) {
-        return orderService.removeItem(orderId, cartItem);
-    }
-
-    @PutMapping("/add/{orderId}")
-    public Order addItem(@PathVariable Long orderId, @RequestBody CartItem cartItem) {
-        return orderService.addItem(orderId, cartItem);
-    }
 }

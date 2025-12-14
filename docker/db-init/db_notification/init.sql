@@ -1,7 +1,14 @@
--- 5_notification_service.sql
--- Creates `email_logs` table for the Notification Service
-
+-- Init for db_notification (notification service)
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Reusable function to keep updated_at current (defined per-DB for isolated deployments)
+CREATE OR REPLACE FUNCTION update_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
 CREATE TABLE IF NOT EXISTS email_logs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

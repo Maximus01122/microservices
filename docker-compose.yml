@@ -18,17 +18,88 @@ services:
     networks:
       - ticketchief-net
 
-  db:
+  db_user:
     image: postgres:15-alpine
-    container_name: ticketchief-db
+    container_name: ticketchief-db-user
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
       POSTGRES_DB: ticketchief
-    ports:
-      - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_user_data:/var/lib/postgresql/data
+      - ./docker/db-init/db_user/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d ticketchief"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ticketchief-net
+
+  db_event:
+    image: postgres:15-alpine
+    container_name: ticketchief-db-event
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ticketchief
+    volumes:
+      - postgres_event_data:/var/lib/postgresql/data
+      - ./docker/db-init/db_event/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d ticketchief"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ticketchief-net
+
+  db_orders:
+    image: postgres:15-alpine
+    container_name: ticketchief-db-orders
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ticketchief
+    volumes:
+      - postgres_orders_data:/var/lib/postgresql/data
+      - ./docker/db-init/db_orders/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d ticketchief"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ticketchief-net
+
+  db_payment:
+    image: postgres:15-alpine
+    container_name: ticketchief-db-payment
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ticketchief
+    volumes:
+      - postgres_payment_data:/var/lib/postgresql/data
+      - ./docker/db-init/db_payment/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d ticketchief"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ticketchief-net
+
+  db_notification:
+    image: postgres:15-alpine
+    container_name: ticketchief-db-notification
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ticketchief
+    volumes:
+      - postgres_notification_data:/var/lib/postgresql/data
+      - ./docker/db-init/db_notification/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U user -d ticketchief"]
       interval: 10s
@@ -44,11 +115,11 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
-      db:
+      db_user:
         condition: service_healthy
     environment:
       - AMQP_URL=amqp://user:password@rabbitmq:5672/
-      - DATABASE_URL=postgresql://user:password@db:5432/ticketchief
+      - DATABASE_URL=postgresql://user:password@db_user:5432/ticketchief
       - SERVICE_PORT=3002
     ports:
       - "3002:3002"
@@ -62,11 +133,11 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
-      db:
+      db_event:
         condition: service_healthy
     environment:
       - AMQP_URL=amqp://user:password@rabbitmq:5672/
-      - DATABASE_URL=postgresql://user:password@db:5432/ticketchief
+      - DATABASE_URL=postgresql://user:password@db_event:5432/ticketchief
       - SERVICE_PORT=3001
     ports:
       - "3001:3001"
@@ -81,6 +152,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      db_orders:
+        condition: service_healthy
     environment:
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_RABBITMQ_PORT: 5672
@@ -91,7 +164,7 @@ services:
       APP_INVOICE_BASE_URL: http://orderservice:8080/files/invoices
       
       # Postgres datasource for orderservice
-      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/ticketchief
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db_orders:5432/ticketchief
       SPRING_DATASOURCE_USERNAME: user
       SPRING_DATASOURCE_PASSWORD: password
       SPRING_DATASOURCE_DRIVER: org.postgresql.Driver
@@ -121,6 +194,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      db_payment:
+        condition: service_healthy
     environment:
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_RABBITMQ_PORT: 5672
@@ -137,7 +212,7 @@ services:
       APP_PAYMENT_SIMULATOR_DELAY_MS: "500"
 
       # Postgres datasource for paymentservice
-      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/ticketchief
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db_payment:5432/ticketchief
       SPRING_DATASOURCE_USERNAME: user
       SPRING_DATASOURCE_PASSWORD: password
       SPRING_DATASOURCE_DRIVER: org.postgresql.Driver
@@ -157,7 +232,7 @@ services:
         condition: service_healthy
       orderservice:
         condition: service_started
-      db:
+      db_notification:
         condition: service_healthy
     environment:
       SPRING_RABBITMQ_HOST: rabbitmq
@@ -177,7 +252,7 @@ services:
       
       ORDER_SERVICE_BASE_URL: http://orderservice:8080
       # Postgres connection for Spring Boot
-      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/ticketchief
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db_notification:5432/ticketchief
       SPRING_DATASOURCE_USERNAME: user
       SPRING_DATASOURCE_PASSWORD: password
     ports:
@@ -221,5 +296,9 @@ networks:
 
 volumes:
   invoices:
-  postgres_data:
+  postgres_user_data:
+  postgres_event_data:
+  postgres_orders_data:
+  postgres_payment_data:
+  postgres_notification_data:
 

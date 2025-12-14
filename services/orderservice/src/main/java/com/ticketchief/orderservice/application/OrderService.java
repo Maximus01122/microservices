@@ -68,18 +68,6 @@ public class OrderService implements OrderServicePort, OrderPaymentServicePort {
         return ordersJpaAdapter.save(order);
     }
 
-    public Order addItem(Long orderId, CartItem item) {
-        Order existingOrder = ordersJpaAdapter.findOrderById(orderId);
-        existingOrder.addItem(item);
-        return ordersJpaAdapter.save(existingOrder);
-    }
-
-    public Order removeItem(Long orderId, CartItem item) {
-        Order existingOrder = ordersJpaAdapter.findOrderById(orderId);
-        existingOrder.removeItem(item);
-        return ordersJpaAdapter.save(existingOrder);
-    }
-
     @Override
     public Order findOrder(Long orderId) {
         return ordersJpaAdapter.findOrderById(orderId);
