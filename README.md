@@ -15,8 +15,7 @@ The project consists of the following microservices:
 
 **Infrastructure:**
 *   **RabbitMQ:** Message broker for asynchronous communication (Payment events, Email requests).
-*   **PostgreSQL:** Persistent database for User and Event services.
-*   **H2:** In-memory database for Java services (orders/payments).
+*   **PostgreSQL:** Persistent database (one per service for full isolation).
 *   **MailHog:** SMTP testing tool to capture emails.
 *   **Nginx:** Reverse proxy serving the frontend and routing API requests.
 
