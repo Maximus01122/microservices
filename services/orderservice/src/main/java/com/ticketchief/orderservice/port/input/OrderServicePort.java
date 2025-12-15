@@ -13,6 +13,10 @@ public interface OrderServicePort {
         String finalizeOrder(Long orderId);
         Order findOrder(Long orderId);
 
+        // Add/remove items from an order
+        Order addItem(Long orderId, com.ticketchief.orderservice.domain.CartItem item);
+        void deleteItem(Long orderId, Long itemId);
+
         ResponseEntity<byte[]> getInvoice(Long orderId) throws IOException;
 
 }

@@ -201,7 +201,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"userId\": \"{{userId}}\",\n  \"status\": \"IN_CART\",\n  \"items\": [\n    {\"eventId\": \"{{eventId}}\", \"seatId\": \"A1\", \"unitPriceCents\": 15000, \"reservationId\": \"{{reservationId}}\"},\n    {\"eventId\": \"{{eventId}}\", \"seatId\": \"A2\", \"unitPriceCents\": 13500, \"reservationId\": \"{{reservationId}}\"},\n    {\"eventId\": \"{{eventId}}\", \"seatId\": \"A3\", \"unitPriceCents\": 12150, \"reservationId\": \"{{reservationId}}\"}\n  ]\n}"
+							"raw": "{\n  \"userId\": \"{{userId}}\",\n  \"userEmail\": \"{{userEmail}}\",\n  \"status\": \"IN_CART\",\n  \"items\": [\n    {\"eventId\": \"{{eventId}}\", \"seatId\": \"A1\", \"unitPriceCents\": 15000, \"reservationId\": \"{{reservationId}}\"},\n    {\"eventId\": \"{{eventId}}\", \"seatId\": \"A2\", \"unitPriceCents\": 13500, \"reservationId\": \"{{reservationId}}\"},\n    {\"eventId\": \"{{eventId}}\", \"seatId\": \"A3\", \"unitPriceCents\": 12150, \"reservationId\": \"{{reservationId}}\"}\n  ]\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}/orders",

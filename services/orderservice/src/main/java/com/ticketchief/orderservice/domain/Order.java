@@ -12,6 +12,7 @@ public class Order {
 
     private final Long id;
     private final String userId;
+    private final String userEmail;
     private final List<CartItem> items;
     private Status status;
     private long totalAmountCents;
@@ -27,16 +28,17 @@ public class Order {
         FAILED
     }
 
-    public Order(Long id, String userId, List<CartItem> items, Status status) {
-        this(id, userId, items, status, 0L, 0L, "CAD", null, null);
+    public Order(Long id, String userId, String userEmail, List<CartItem> items, Status status) {
+        this(id, userId, userEmail, items, status, 0L, 0L, "CAD", null, null);
     }
 
     @JsonCreator
-    public Order(@JsonProperty("id") Long id, @JsonProperty("userId") String userId, @JsonProperty("items") List<CartItem> items, @JsonProperty("status") Status status,
+    public Order(@JsonProperty("id") Long id, @JsonProperty("userId") String userId, @JsonProperty("userEmail") String userEmail, @JsonProperty("items") List<CartItem> items, @JsonProperty("status") Status status,
                  @JsonProperty("totalAmountCents") long totalAmountCents, @JsonProperty("taxAmountCents") long taxAmountCents, @JsonProperty("currency") String currency,
                  @JsonProperty("createdAt") OffsetDateTime createdAt, @JsonProperty("updatedAt") OffsetDateTime updatedAt) {
         this.id = id;
         this.userId = userId;
+        this.userEmail = userEmail;
         this.items = items == null ? new ArrayList<>() : new ArrayList<>(items);
         this.status = status == null ? Status.IN_CART : status;
         this.totalAmountCents = totalAmountCents;
@@ -50,18 +52,29 @@ public class Order {
         return userId;
     }
 
+    public String getUserEmail() {
+        return userEmail;
+    }
+
+    // Adds an item to the order when the order is in the IN_CART status.
+    // Preserves behaviour expected by controller/service/tests.
+    public void addItem(CartItem item) {
+        if (this.status != Status.IN_CART) {
+            throw new IllegalStateException("Cannot add item unless order is IN_CART");
+        }
+        this.items.add(item);
+    }
+
+    // Deletes an item by id when the order is IN_CART. Returns true if removed.
+    public boolean deleteItem(Long itemId) {
+        if (this.status != Status.IN_CART) {
+            throw new IllegalStateException("Cannot delete item unless order is IN_CART");
+        }
+        return this.items.removeIf(ci -> Objects.equals(ci.id(), itemId));
+    }
+
     public List<CartItem> getItems() {
         return Collections.unmodifiableList(items);
-    }
-
-    public void addItem(CartItem item) {
-        requireEditable();
-        items.add(item);
-    }
-
-    public void removeItem(CartItem item) {
-        requireEditable();
-        items.remove(item);
     }
 
     public boolean assignTicket(String eventId, String seatId, String ticketId, String ticketQr) {
@@ -110,10 +123,6 @@ public class Order {
         this.status = Status.PAID;
     }
 
-    private void requireEditable() {
-        if (this.status != Status.IN_CART) throw new IllegalStateException("Order is frozen (" + status + ")");
-    }
-
     public long getTotalAmountCents() {
         return totalAmountCents;
     }
@@ -153,6 +162,4 @@ public class Order {
     public void setUpdatedAt(OffsetDateTime updatedAt) {
         this.updatedAt = updatedAt;
     }
-
-    
 }

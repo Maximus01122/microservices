@@ -317,7 +317,8 @@ async def stream_event_updates(event_id: str):
                     snapshot = {"type": "snapshot", "seats": event.seats}
                     yield f"data: {json.dumps(snapshot)}\n\n"
                 else:
-                    yield f"data: {json.dumps({"type": "error", "error": "event not found"})}\n\n"
+                    # avoid f-string parsing issues by concatenating the JSON
+                    yield "data: " + json.dumps({"type": "error", "error": "event not found"}) + "\n\n"
             finally:
                 db.close()
 

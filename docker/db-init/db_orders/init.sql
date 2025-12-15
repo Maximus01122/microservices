@@ -13,6 +13,7 @@ $$ LANGUAGE plpgsql;
 CREATE TABLE IF NOT EXISTS orders (
   id BIGSERIAL PRIMARY KEY,
   user_id UUID,
+  user_email VARCHAR(255),
   status VARCHAR(50) NOT NULL DEFAULT 'IN_CART',
   total_amount BIGINT NOT NULL DEFAULT 0,
   tax_amount BIGINT NOT NULL DEFAULT 0,

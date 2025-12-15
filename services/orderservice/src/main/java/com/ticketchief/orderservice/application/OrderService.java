@@ -40,10 +40,8 @@ public class OrderService implements OrderServicePort, OrderPaymentServicePort {
     private final OrdersRepositoryPort ordersJpaAdapter;
     private final PublishPaymentRequestedPort paymentPublisher;
     private final PublishEmailRequestedPort emailPublisher;
-    private final com.ticketchief.orderservice.port.output.UserClientPort userClient;
     private final PublishPaymentValidatedPort paymentValidatedPublisher;
     private final InvoicePort invoiceAdapter;
-    private final com.ticketchief.orderservice.port.output.TicketReservationPort ticketReservationPort;
     private final PublishReservationReleasePort reservationReleasePublisher;
 
     @Value("${app.invoice.storage-dir}")
@@ -52,24 +50,36 @@ public class OrderService implements OrderServicePort, OrderPaymentServicePort {
     public OrderService(OrdersRepositoryPort ordersJpaAdapter,
                         PublishPaymentRequestedPort paymentPublisher,
                         PublishEmailRequestedPort emailPublisher,
-                        com.ticketchief.orderservice.port.output.UserClientPort userClient,
                         PublishPaymentValidatedPort paymentValidatedPublisher,
                         InvoicePort invoiceAdapter,
-                        com.ticketchief.orderservice.port.output.TicketReservationPort ticketReservationPort,
                         PublishReservationReleasePort reservationReleasePublisher) {
         this.ordersJpaAdapter = ordersJpaAdapter;
         this.paymentPublisher = paymentPublisher;
         this.emailPublisher = emailPublisher;
-        this.userClient = userClient;
         this.paymentValidatedPublisher = paymentValidatedPublisher;
         this.invoiceAdapter = invoiceAdapter;
-        this.ticketReservationPort = ticketReservationPort;
         this.reservationReleasePublisher = reservationReleasePublisher;
     }
 
     @Override
     public Order placeOrder(Order order) {
         return ordersJpaAdapter.save(order);
+    }
+
+    @Override
+    public Order addItem(Long orderId, CartItem item) {
+        Order order = ordersJpaAdapter.findOrderById(orderId);
+        order.addItem(item);
+        return ordersJpaAdapter.save(order);
+    }
+
+    @Override
+    public void deleteItem(Long orderId, Long itemId) {
+        Order order = ordersJpaAdapter.findOrderById(orderId);
+        boolean removed = order.deleteItem(itemId);
+        if (removed) {
+            ordersJpaAdapter.save(order);
+        }
     }
 
     @Override
@@ -194,15 +204,10 @@ public class OrderService implements OrderServicePort, OrderPaymentServicePort {
 
         if (order.hasAllTicketsIssued()) {
             InvoicePort.InvoiceResult result = invoiceAdapter.generateInvoice(order);
-            // Resolve user email synchronously via userClient (outside port)
-            String recipient = null;
-            try {
-                recipient = userClient.getUserEmail(order.getUserId());
-            } catch (Exception ex) {
-                log.warn("Failed to resolve user email for userId={}: {}", order.getUserId(), ex.getMessage());
-            }
+            // Use stored user email (no synchronous user service call)
+            String recipient = order.getUserEmail();
             if (recipient == null || recipient.isBlank()) {
-                log.warn("No valid email for userId={} — cannot send invoice for orderId={}", order.getUserId(), order.getId());
+                log.warn("No valid email stored for userId={} — cannot send invoice for orderId={}", order.getUserId(), order.getId());
                 return;
             }
 

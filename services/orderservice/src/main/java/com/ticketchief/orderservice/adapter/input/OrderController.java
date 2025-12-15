@@ -22,6 +22,16 @@ public class OrderController {
         return orderService.placeOrder(order);
     }
 
+    @PostMapping("/{orderId}/items")
+    public Order addItem(@PathVariable Long orderId, @RequestBody CartItem item) {
+        return orderService.addItem(orderId, item);
+    }
+
+    @DeleteMapping("/{orderId}/items/{itemId}")
+    public void deleteItem(@PathVariable Long orderId, @PathVariable Long itemId) {
+        orderService.deleteItem(orderId, itemId);
+    }
+
     @DeleteMapping("/{orderId}")
     public void cancelOrder(@PathVariable Long orderId) {
         orderService.cancelOrder(orderId);

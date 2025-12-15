@@ -20,6 +20,9 @@ public class OrderEntity {
 
     @Column(name = "user_id")
     private UUID userId;
+    
+    @Column(name = "user_email")
+    private String userEmail;
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<CartItemEntity> items;
@@ -50,6 +53,10 @@ public class OrderEntity {
 
     public void setUserId(UUID userId) {
         this.userId = userId;
+    }
+
+    public void setUserEmail(String userEmail) {
+        this.userEmail = userEmail;
     }
 
     public void setItems(List<CartItemEntity> items) {
@@ -89,6 +96,7 @@ public class OrderEntity {
         } catch (IllegalArgumentException ex) {
             entity.setUserId(null);
         }
+        entity.setUserEmail(order.getUserEmail());
         entity.setStatus(order.getStatus());
         entity.setTotalAmountCents(order.getTotalAmountCents());
         entity.setTaxAmountCents(order.getTaxAmountCents());
@@ -104,7 +112,7 @@ public class OrderEntity {
 
     public Order toDomain() {
         return new Order(
-            id, userId == null ? null : userId.toString(),
+            id, userId == null ? null : userId.toString(), userEmail,
             items.stream().map(CartItemEntity::toDomain).collect(Collectors.toCollection(ArrayList::new)),
             status,
             totalAmountCents,

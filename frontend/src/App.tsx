@@ -337,6 +337,7 @@ const App: React.FC = () => {
       console.log('reserveSeats: creating order with items', items);
       const orderRes = await axios.post(`${API_BASE}/api/orders`, {
         userId: user.id,
+        userEmail: user.email,
         status: 'IN_CART',
         items: items
       });
